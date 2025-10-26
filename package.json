@@ -12,7 +12,6 @@
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
     "test": "jest --passWithNoTests",
-    "notifications:work": "ts-node src/main.cli.ts notifications:work",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier \"src/**/*.{js,json,ts,tsx,md}\" --check",

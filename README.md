@@ -174,16 +174,60 @@ export class BillingService {
 
 If a queue adapter is registered and the notification implements `ShouldQueue`, `NotificationManager` enqueues the job automatically.
 
-Start the worker with the built-in `nest-commander` command using `notifications:work`
+There are two ways to run the worker that processes queued jobs:
 
+1) Run the worker inside your Nest app process (quick start)
 
-You can adjust the blocking timeout:
+Enable the built-in worker to start as part of your application lifecycle. This is convenient for local development or very small deployments, but not recommended for production.
 
-```bash
-... notifications:work -- --block-timeout 10
+```ts
+import { Module } from '@nestjs/common';
+import { NotificationModule } from '@voxcape/nestjs-notifications';
+
+@Module({
+  imports: [
+    NotificationModule.forRoot({
+      worker: {
+        enabled: true,
+        // Optional: override the Redis BRPOP block timeout (seconds)
+        blockTimeoutSeconds: 10,
+      },
+    }),
+  ],
+})
+export class AppModule {}
 ```
 
-Jobs are pulled from Redis (via `REDIS_QUEUE_KEY`). When a job is dequeued, the worker republishes to the same manager with `skipQueue = true`, ensuring idempotent processing.
+Warning: Running the worker in the same process as your HTTP server can starve the event loop under load, complicate horizontal scaling, and make graceful shutdown harder. Prefer a dedicated worker process in production.
+
+2) Run the worker as a separate process (recommended)
+
+The library ships with a nest-commander command (notifications:work). To use it, wire the command into your own application entrypoint and launch it as a separate process.
+
+Example CLI bootstrap in your app:
+
+```ts
+// src/main.cli.ts (in your app)
+import 'reflect-metadata';
+import { CommandFactory } from 'nest-commander';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  await CommandFactory.run(AppModule, ['warn', 'error', 'debug', 'log']);
+}
+bootstrap();
+```
+
+Notes:
+- Ensure your AppModule imports NotificationModule.forRoot(...) so the worker command is registered.
+- You can also call CommandFactory.run(NotificationModule.forRoot(...)) directly in tiny apps, but using AppModule is typical.
+- Pass CLI flags after a double dash. For example, to change the block timeout:
+
+```bash
+node dist/main.cli.js notifications:work -- --block-timeout 10
+```
+
+How it works: Jobs are pulled from Redis (via REDIS_QUEUE_KEY). When a job is dequeued, the worker republishes it to the NotificationManager with skipQueue = true, ensuring idempotent processing.
 
 ## Notification discovery and type registration
 
@@ -274,12 +318,11 @@ Leverage the exported `env()` helper when building custom adapters so configurat
 
 ## Scripts
 
-| Command                      | Description                                    |
-|------------------------------|------------------------------------------------|
-| `npm run build`              | Compile TypeScript sources into `dist/`        |
-| `npm test`                   | Execute the Jest test suite                    |
-| `npm run notifications:work` | Run the queue worker via `nest-commander`      |
-| `npm run clean`              | Remove build artifacts                         |
+| Command             | Description                                     |
+|---------------------|-------------------------------------------------|
+| `npm run build`     | Compile TypeScript sources into `dist/`         |
+| `npm test`          | Execute the Jest test suite                     |
+| `npm run clean`     | Remove build artifacts                          |
 
 ## Testing
 
