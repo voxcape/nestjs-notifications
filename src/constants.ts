@@ -1,0 +1,6 @@
+export const NOTIFICATION_CHANNELS = Symbol('NOTIFICATION_CHANNEL');
+export const MAIL_ADAPTER = Symbol('MAIL_ADAPTER');
+export const MAIL_RENDERER = Symbol('MAIL_RENDERER');
+export const DATABASE_ADAPTER = Symbol('DATABASE_ADAPTER');
+export const BROADCAST_ADAPTER = Symbol('BROADCAST_ADAPTER');
+export const QUEUE_ADAPTER = Symbol('QUEUE_ADAPTER');

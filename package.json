@@ -1,0 +1,74 @@
+{
+  "name": "@voxcape/nestjs-notifications",
+  "version": "0.0.1",
+  "description": "A Laravel-style notification system for NestJS with Redis broadcast, mail, and queue support.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "jest --passWithNoTests",
+    "notifications:work": "ts-node src/main.cli.ts notifications:work",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "npm run lint -- --fix",
+    "format": "prettier \"src/**/*.{js,json,ts,tsx,md}\" --check",
+    "format:write": "prettier \"src/**/*.{js,json,ts,tsx,md}\" --write"
+  },
+  "keywords": [
+    "nestjs",
+    "notifications",
+    "mail",
+    "broadcast",
+    "queue",
+    "redis",
+    "laravel",
+    "voxcape"
+  ],
+  "author": {
+    "name": "Bolaji Ajani",
+    "organization": "Voxcape"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voxcape/nestjs-notifications.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.1"
+  },
+  "optionalDependencies": {
+    "ioredis": "5.4.1"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.8.1",
+    "@types/nodemailer": "^7.0.2",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "jest": "30.2.0",
+    "nodemailer": "7.0.10",
+    "prettier": "^3.3.3",
+    "rimraf": "6.0.1",
+    "ts-jest": "29.4.5",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "class-transformer": "0.5.1",
+    "nest-commander": "3.20.1"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules
+src/coverage
+.env
+AGENTS.md
+dist
+.idea
