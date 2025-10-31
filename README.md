@@ -6,7 +6,7 @@ A Laravel-inspired notifications layer for NestJS that orchestrates mail, broadc
 
 - Laravel-style channel builders (`toMail`, `toBroadcast`, `toDatabase`) for expressive notifications
 - Drop-in NestJS module prewired with Nodemailer, Redis queue, and Redis broadcast adapters
-- Queue opt-in via the lightweight `ShouldQueue()` method
+- Queue opt-in via `shouldQueue()` plus per-notification retry/backoff controls
 - Extensible injection tokens to swap adapters, renderers, or register custom channels
 - CLI worker built on nest-commander for resilient background processing
 
@@ -101,21 +101,35 @@ export class AppModule {}
 
 ## Creating a notification
 
-Notifications declare which channels they use and how to render payloads per channel. Implement `ShouldQueue` to opt into asynchronous delivery.
+Notifications declare which channels they use and how to render payloads per channel. Override `shouldQueue()` when you want the notification processed through the queue.
 
 ```ts
 import {
-    Notification,
-    ShouldQueue,
+    BaseNotification,
     MailMessage,
 } from '@voxcape/nestjs-notifications';
 import { User } from '../users/user.entity';
 import { Invoice } from '../billing/invoice.entity';
 
-export class InvoicePaidNotification
-    implements Notification<User>, ShouldQueue
-{
-    constructor(private readonly invoice: Invoice) {}
+export class InvoicePaidNotification extends BaseNotification<User> {
+    retryLimit = 3;
+    delaySeconds = 5;
+
+    constructor(private readonly invoice: Invoice) {
+        super();
+    }
+
+    shouldQueue(): boolean {
+        return true;
+    }
+
+    shouldRetry(error: Error, attempt: number): boolean {
+        return !error.message.includes('fatal') && attempt <= this.retryLimit;
+    }
+
+    backoff(attempt: number): number {
+        return this.delaySeconds * Math.pow(2, attempt);
+    }
 
     channels(): string[] {
         return ['mail', 'broadcast'];
@@ -146,6 +160,8 @@ export class InvoicePaidNotification
 }
 ```
 
+Setting `retryLimit` caps the number of requeue attempts. `delaySeconds` defines the initial delay before retrying and seeds the default exponential backoff. Override `shouldRetry` to short-circuit retries for specific errors, and `backoff` to customize the delay that will be passed to the queue adapter on each attempt.
+
 ## Dispatching notifications
 
 Inject `NotificationManager` anywhere in your Nest application to send notifications to a `RecipientLike` (email, id, or arbitrary data). Passing `skipQueue = true` bypasses the queue adapter even for queueable notifications.
@@ -172,7 +188,9 @@ export class BillingService {
 
 ## Working with queues
 
-If a queue adapter is registered and the notification implements `ShouldQueue`, `NotificationManager` enqueues the job automatically.
+If a queue adapter is registered and `shouldQueue()` returns true, `NotificationManager` enqueues the job automatically.
+
+When a queued job fails, the manager reschedules it using the notification's `retryLimit`, `delaySeconds`, `shouldRetry`, and `backoff` hooks. Failures are enqueued with an incremented attempt counter and the computed delay so adapters like `RedisQueueAdapter` can delay the next attempt.
 
 There are two ways to run the worker that processes queued jobs:
 

@@ -1,4 +1,4 @@
-import { Notification as Notification } from './notification.interface';
+import { Notification } from './notification.interface';
 import { RecipientLike } from './types';
 export abstract class BaseNotification<R extends RecipientLike = RecipientLike>
     implements Notification<R>
@@ -8,6 +8,26 @@ export abstract class BaseNotification<R extends RecipientLike = RecipientLike>
      * class by its type.
      */
     static type: string;
+
+    /**
+     * @inheritDoc
+     */
+    retryLimit? = 0;
+
+    /**
+     * @inheritDoc
+     */
+    delaySeconds? = 0;
+
+    /**
+     * @inheritDoc
+     */
+    shouldRetry?(error: Error, attempt: number): boolean;
+
+    /**
+     * @inheritDoc
+     */
+    backoff?(attempt: number, error: Error): number;
 
     /**
      * @inheritDoc

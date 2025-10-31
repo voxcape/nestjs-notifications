@@ -62,7 +62,7 @@ export class NotificationWorkerService {
                         : data;
                     await this.notifications.send(notification, recipient, true);
                     this.logger.log(
-                        `Processed job: ${typeName} => ${recipient?.email ?? recipient?.id ?? 'unknown-recipient'}`,
+                        `Processed job: ${typeName} => ${recipient?.email ?? recipient?.id ?? 'unknown-recipient'} at ${Date.now()}`,
                     );
                 } catch (error) {
                     this.logger.error(

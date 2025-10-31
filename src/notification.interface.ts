@@ -2,6 +2,38 @@ import { ChannelName, MailMessage, DatabaseRecord, RecipientLike } from './types
 
 export interface Notification<R extends RecipientLike = RecipientLike> {
     /**
+     * The maximum number of retry attempts allowed for a specific operation or process.
+     * This value determines how many times the system will attempt to retry before failing.
+     * If not specified, the default behavior is implementation-defined.
+     * A value of `0` typically indicates that no retries should occur, and a value greater than `0` specifies the permitted number of retries.
+     */
+    retryLimit?: number;
+
+    /**
+     * An optional variable that specifies a delay duration in seconds.
+     * Can be used to define how long a delay should last, typically in asynchronous operations or time-based logic.
+     * If not provided, delaySeconds is undefined and no delay will be applied.
+     */
+    delaySeconds?: number;
+
+    /**
+     * Determines whether a retry should be attempted based on the provided error and the number of attempts made.
+     *
+     * @param {Error} error - The error encountered during the operation.
+     * @param {number} attempt - The number of retry attempts already made.
+     * @return {boolean} Returns true if the operation should be retried, otherwise false.
+     */
+    shouldRetry?(error: Error, attempt: number): boolean;
+
+    /**
+     * Provides a mechanism to calculate the delay time before retrying an operation, typically after a failure.
+     *
+     * @param {number} attempt - The current retry attempt number, starting from 1.
+     * @param {Error} error - The error object associated with the failure of the previous attempt.
+     * @return {number} The calculated delay time in milliseconds before the next retry attempt.
+     */
+    backoff?(attempt: number, error: Error): number;
+    /**
      * Retrieves a list of channel names associated with the given recipient.
      *
      * @param recipient - The recipient for whom the channels are being retrieved.

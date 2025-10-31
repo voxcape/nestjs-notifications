@@ -1,4 +1,4 @@
-import { BaseNotification } from './base-notification';
+import { Notification } from './notification.interface';
 
 export type ChannelName = string;
 
@@ -36,7 +36,7 @@ export interface DatabaseRecord {
 
 export type SerializedNotification = {
     notification: string;
-    data: BaseNotification;
+    data: Notification;
     recipient: RecipientLike;
     timestamp: number;
 };

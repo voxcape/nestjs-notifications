@@ -3,8 +3,28 @@ import { RedisQueueAdapter } from '../adapters/redis-queue.adapter';
 
 const lpushMock = jest.fn();
 const brpopMock = jest.fn();
+const zaddMock = jest.fn();
+const zrangebyscoreMock = jest.fn();
 const quitMock = jest.fn();
 const disconnectMock = jest.fn();
+
+type MockPipeline = {
+    zrem: jest.Mock;
+    lpush: jest.Mock;
+    exec: jest.Mock;
+};
+
+const multiPipelines: MockPipeline[] = [];
+
+const multiMock = jest.fn().mockImplementation(() => {
+    const pipeline: MockPipeline = {
+        zrem: jest.fn().mockReturnThis(),
+        lpush: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue('OK'),
+    };
+    multiPipelines.push(pipeline);
+    return pipeline;
+});
 
 let lastRedisConfig: { host: string; port: number } | undefined;
 
@@ -14,6 +34,9 @@ jest.mock('ioredis', () => ({
         return {
             lpush: lpushMock,
             brpop: brpopMock,
+            zadd: zaddMock,
+            zrangebyscore: zrangebyscoreMock,
+            multi: multiMock,
             quit: quitMock,
             disconnect: disconnectMock,
         };
@@ -54,6 +77,10 @@ beforeEach(() => {
     disconnectMock.mockReset();
     lpushMock.mockResolvedValue(1);
     brpopMock.mockResolvedValue(null);
+    zaddMock.mockResolvedValue(1);
+    zrangebyscoreMock.mockResolvedValue([]);
+    multiMock.mockClear();
+    multiPipelines.length = 0;
     lastRedisConfig = undefined;
     deleteEnv(['REDIS_QUEUE_KEY', 'REDIS_HOST', 'REDIS_PORT', 'REDIS_QUEUE_BLOCK_TIMEOUT']);
     loggerLogSpy.mockClear();
@@ -107,7 +134,7 @@ describe('RedisQueueAdapter', () => {
         const notification = { constructor: { name: 'TestNotification' } } as unknown as any;
         const recipient = { id: 'user-1' };
 
-        await adapter.enqueue(notification, recipient);
+        await adapter.enqueue(notification, recipient, {});
 
         expect(lpushMock).toHaveBeenCalledWith(
             'notifications:queue',
@@ -124,7 +151,7 @@ describe('RedisQueueAdapter', () => {
         const notification = { constructor: { name: 'TestNotification' } } as unknown as any;
         const recipient = { id: 'user-1' };
 
-        await expect(adapter.enqueue(notification, recipient)).rejects.toThrow(
+        await expect(adapter.enqueue(notification, recipient, {})).rejects.toThrow(
             'RedisQueueAdapter requires NotificationSerializer to enqueue.',
         );
         expect(lpushMock).not.toHaveBeenCalled();
@@ -212,5 +239,100 @@ describe('RedisQueueAdapter', () => {
 
         expect(onError).toHaveBeenCalledWith(failure, jobPayload);
         expect(loggerErrorSpy).toHaveBeenCalledWith('Job failed: failure');
+    });
+
+    it('queues delayed job through zadd when delay option provided', async () => {
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+        const serializer = {
+            serialize: jest.fn((notification: any, recipient: any) => ({
+                notification: notification?.constructor?.name,
+                data: { delaySeconds: 5 },
+                recipient,
+                timestamp: 100,
+            })),
+        };
+        const adapter = createAdapter(serializer);
+        const notification = { constructor: { name: 'DelayedNotification' } } as any;
+        const recipient = { id: 'user-2', email: 'user2@example.test' };
+
+        await adapter.enqueue(notification, recipient, { delaySeconds: 10, attempt: 2 });
+
+        expect(zaddMock).toHaveBeenCalledTimes(1);
+        const expectedScore = 1_700_000_000_000 + 10_000;
+        expect(zaddMock).toHaveBeenCalledWith(
+            'notifications:queue:delayed',
+            expectedScore,
+            expect.stringContaining('DelayedNotification'),
+        );
+        const delayedLog = loggerLogSpy.mock.calls.find((call) =>
+            call[0].startsWith('Queued notification delayed till'),
+        );
+        expect(delayedLog?.[0]).toBe(`Queued notification delayed till ${expectedScore}`);
+        expect(lpushMock).not.toHaveBeenCalled();
+        expect(serializer.serialize).toHaveBeenCalledWith(notification, recipient);
+        nowSpy.mockRestore();
+    });
+
+    it('uses payload delaySeconds when no options delay provided', async () => {
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_010_000);
+        const serializer = {
+            serialize: jest.fn((notification: any, recipient: any) => ({
+                notification: notification?.constructor?.name,
+                data: { delaySeconds: 3 },
+                recipient,
+                timestamp: 200,
+            })),
+        };
+        const adapter = createAdapter(serializer);
+        const notification = { constructor: { name: 'PayloadDelayNotification' } } as any;
+        const recipient = { id: 'user-3' };
+
+        await adapter.enqueue(notification, recipient);
+
+        const expectedScore = 1_700_000_010_000 + 3_000;
+        expect(zaddMock).toHaveBeenCalledWith(
+            'notifications:queue:delayed',
+            expectedScore,
+            expect.stringContaining('"attempt":0'),
+        );
+        expect(lpushMock).not.toHaveBeenCalled();
+        expect(serializer.serialize).toHaveBeenCalledWith(notification, recipient);
+        nowSpy.mockRestore();
+    });
+
+    it('promotes due delayed jobs into the active queue', async () => {
+        const adapter = createAdapter();
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_020_000);
+        zrangebyscoreMock.mockResolvedValueOnce(['job-a', 'job-b']);
+
+        const promoted = await (adapter as any).promoteDueDelayedJobs(50);
+
+        expect(promoted).toBe(2);
+        expect(zrangebyscoreMock).toHaveBeenCalledWith(
+            'notifications:queue:delayed',
+            0,
+            1_700_000_020_000,
+            'LIMIT',
+            0,
+            50,
+        );
+        expect(multiMock).toHaveBeenCalledTimes(1);
+        const pipeline = multiPipelines[0];
+        expect(pipeline.zrem).toHaveBeenNthCalledWith(1, 'notifications:queue:delayed', 'job-a');
+        expect(pipeline.zrem).toHaveBeenNthCalledWith(2, 'notifications:queue:delayed', 'job-b');
+        expect(pipeline.lpush).toHaveBeenNthCalledWith(1, 'notifications:queue', 'job-a');
+        expect(pipeline.lpush).toHaveBeenNthCalledWith(2, 'notifications:queue', 'job-b');
+        expect(pipeline.exec).toHaveBeenCalledTimes(1);
+        nowSpy.mockRestore();
+    });
+
+    it('skips promotion when no delayed jobs are due', async () => {
+        const adapter = createAdapter();
+
+        const promoted = await (adapter as any).promoteDueDelayedJobs();
+
+        expect(promoted).toBe(0);
+        expect(zrangebyscoreMock).toHaveBeenCalled();
+        expect(multiMock).not.toHaveBeenCalled();
     });
 });

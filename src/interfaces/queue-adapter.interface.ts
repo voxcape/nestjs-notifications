@@ -50,15 +50,35 @@ export interface QueueWorkerConfig extends QueueDequeueConfig {
     onComplete?: (job: any) => void;
 }
 
+/**
+ * Represents metadata for enqueueing an operation or task.
+ *
+ * This type can be used to specify information about retry attempts,
+ * delays, and any other custom metadata when enqueueing items.
+ *
+ * Properties:
+ * - `attempt` (optional): The current attempt number of the operation.
+ * - `maxAttempts` (optional): The maximum number of retry attempts allowed.
+ * - `delaySeconds` (optional): The delay in seconds before the next attempt.
+ * - `[key: string]: any`: Allows additional custom properties to be set.
+ */
+export type EnqueueOptions = {
+    attempt?: number;
+    maxAttempts?: number;
+    delaySeconds?: number;
+    [key: string]: any;
+}
+
 export interface QueueAdapter {
     /**
      * Adds a notification to the queue for delivery to the specified recipient.
      *
      * @param {Notification} notification - The notification to be queued for delivery.
      * @param {RecipientLike} recipient - The recipient to whom the notification will be sent.
+     * @param options
      * @return {Promise<void>} A promise that resolves when the notification is successfully queued.
      */
-    enqueue(notification: Notification, recipient: RecipientLike): Promise<void>;
+    enqueue(notification: Notification, recipient: RecipientLike, options?: EnqueueOptions): Promise<void>;
 
     /**
      * Removes and retrieves the next item from the queue based on the provided configuration.
