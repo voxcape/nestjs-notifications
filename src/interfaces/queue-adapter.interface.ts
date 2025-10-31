@@ -67,7 +67,7 @@ export type EnqueueOptions = {
     maxAttempts?: number;
     delaySeconds?: number;
     [key: string]: any;
-}
+};
 
 export interface QueueAdapter {
     /**
@@ -78,7 +78,11 @@ export interface QueueAdapter {
      * @param options
      * @return {Promise<void>} A promise that resolves when the notification is successfully queued.
      */
-    enqueue(notification: Notification, recipient: RecipientLike, options?: EnqueueOptions): Promise<void>;
+    enqueue(
+        notification: Notification,
+        recipient: RecipientLike,
+        options?: EnqueueOptions,
+    ): Promise<void>;
 
     /**
      * Removes and retrieves the next item from the queue based on the provided configuration.

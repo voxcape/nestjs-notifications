@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { BaseNotification } from './base-notification';
-import {getNotificationConstructor, registerNotificationType} from './notification.registry';
+import { getNotificationConstructor, registerNotificationType } from './notification.registry';
 import { RecipientLike, SerializedNotification } from './types';
 
 @Injectable()

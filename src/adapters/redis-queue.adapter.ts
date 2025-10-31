@@ -9,7 +9,7 @@ import { RecipientLike } from '../types';
 import { Redis } from 'ioredis';
 import { env } from '../utils/env';
 import { NotificationSerializer } from '../notification.serializer';
-import {BaseNotification} from "../base-notification";
+import { BaseNotification } from '../base-notification';
 
 @Injectable()
 export class RedisQueueAdapter implements QueueAdapter {
@@ -40,14 +40,14 @@ export class RedisQueueAdapter implements QueueAdapter {
         }
 
         const payload = this.serializer.serialize(notification, recipient);
-        const envelope = {...payload, attempt: options?.attempt ?? 0}
+        const envelope = { ...payload, attempt: options?.attempt ?? 0 };
 
         const delaySeconds = options?.delaySeconds ?? payload.data.delaySeconds;
 
         if (delaySeconds && delaySeconds > 0) {
             const score = Date.now() + delaySeconds * 1000;
             await this.redis.zadd(this.getDelayedKey(), score, JSON.stringify(envelope));
-            this.logger.log(`Queued notification delayed till ${score}`)
+            this.logger.log(`Queued notification delayed till ${score}`);
         } else {
             await this.redis.lpush(this.queueKey, JSON.stringify(payload));
         }
@@ -128,7 +128,6 @@ export class RedisQueueAdapter implements QueueAdapter {
 
         const due = await this.redis.zrangebyscore(delayedKey, 0, now, 'LIMIT', 0, batchSize);
         if (!due.length) return 0;
-
 
         const multi = this.redis.multi();
 

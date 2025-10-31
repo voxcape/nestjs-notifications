@@ -1,4 +1,4 @@
-import {Inject, Injectable, Logger, Optional} from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { NOTIFICATION_CHANNELS, QUEUE_ADAPTER } from './constants';
 import { NotificationChannel } from './interfaces/channel.interface';
 import { Notification } from './notification.interface';
@@ -99,5 +99,4 @@ export class NotificationManager {
             delaySeconds: backoffSeconds,
         });
     }
-
 }
