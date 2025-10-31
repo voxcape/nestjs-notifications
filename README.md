@@ -10,6 +10,12 @@ A Laravel-inspired notifications layer for NestJS that orchestrates mail, broadc
 - Extensible injection tokens to swap adapters, renderers, or register custom channels
 - CLI worker built on nest-commander for resilient background processing
 
+## Project status
+
+This library is still in an experimental, "beta-ish" phase while we validate more real-world workloads.
+Core features—mail delivery, Redis-backed broadcasting, queue retries, and the worker—are exercised in production-style environments and backed by automated tests, so you can rely on them for critical paths today.
+Expect some APIs to evolve as we keep refining ergonomics; we document breaking changes quickly and aim to keep upgrades smooth.
+
 ## Architecture Overview
 The following diagram shows how @voxcape/nestjs-notifications works internally:
 
