@@ -7,7 +7,7 @@ A Laravel-inspired notifications layer for NestJS that orchestrates mail, broadc
 - Laravel-style channel builders (`toMail`, `toBroadcast`, `toDatabase`) for expressive notifications
 - Drop-in NestJS module prewired with Nodemailer, Redis queue, and Redis broadcast adapters
 - Queue opt-in via `shouldQueue()` plus per-notification retry/backoff controls
-- Extensible injection tokens to swap adapters, renderers, or register custom channels
+- Extensible injection tokens to swap adapters or register custom channels
 - CLI worker built on nest-commander for resilient background processing
 
 ## Project status
@@ -318,7 +318,7 @@ The module ships with three core channels:
 | Database   | _none provided_               | `DATABASE_ADAPTER`      | Supply your own persistence adapter                 |
 | Broadcast  | `RedisBroadcastAdapter`       | `BROADCAST_ADAPTER`     | Publish real-time payloads to Redis channels        |
 
-Queueing uses `RedisQueueAdapter` by default and can be replaced via the `QUEUE_ADAPTER` token. Provide a `MAIL_RENDERER` to transform `MailMessage` objects before delivery (e.g., MJML or templating).
+Queueing uses `RedisQueueAdapter` by default and can be replaced via the `QUEUE_ADAPTER` token.
 
 Custom channels can be registered by passing the class or provider definition through `NotificationModule.forRoot({ channels: [WebhookChannel] })`. The array is merged with the built-in channels and injected via `NOTIFICATION_CHANNELS`.
 

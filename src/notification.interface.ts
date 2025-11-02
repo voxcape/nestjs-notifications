@@ -45,9 +45,9 @@ export interface Notification<R extends RecipientLike = RecipientLike> {
      * Transforms the provided recipient into a mail message object, if applicable.
      *
      * @param recipient - The recipient information used to create the mail message.
-     * @return {MailMessage | undefined} A MailMessage object if the transformation is successful, or undefined otherwise.
+     * @return Promise<{MailMessage | undefined}> - A MailMessage object if the transformation is successful, or undefined otherwise.
      */
-    toMail?(recipient: R): MailMessage | undefined;
+    toMail?(recipient: R): Promise<MailMessage | undefined>;
 
     /**
      * Converts the given recipient object to a database record format.

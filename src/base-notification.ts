@@ -39,7 +39,7 @@ export abstract class BaseNotification<R extends RecipientLike = RecipientLike>
     /**
      * @inheritDoc
      */
-    public toMail?(recipient: R): any;
+    public async toMail?(recipient: R): Promise<any>;
 
     /**
      * @inheritDoc
