@@ -26,7 +26,6 @@ import { NotificationWorkerService } from './notification-worker.service';
 export interface NotificationModuleOptions {
     channels?: Provider[];
     mailAdapter?: Provider;
-    mailRenderer?: Provider;
     databaseAdapter?: Provider;
     /**
      * An optional property that specifies the broadcast adapter to be used.
@@ -98,7 +97,6 @@ export class NotificationModule implements OnModuleInit {
      *   - `mailAdapter`: Custom mail adapter. If not provided, defaults to `NodemailerMailAdapter`.
      *   - `broadcastAdapter`: Custom broadcast adapter. If not provided, defaults to `RedisBroadcastAdapter`.
      *   - `queueAdapter`: Custom queue adapter. If not provided, defaults to `RedisQueueAdapter`.
-     *   - `mailRenderer`: Custom mail rendering provider.
      *   - `databaseAdapter`: Custom database adapter.
      * @return {DynamicModule} A configured dynamic module for NotificationModule, including providers and exports.
      */
@@ -136,7 +134,6 @@ export class NotificationModule implements OnModuleInit {
             options.queueAdapter ?? { provide: QUEUE_ADAPTER, useClass: RedisQueueAdapter },
         );
 
-        if (options.mailRenderer) providers.push(options.mailRenderer);
         if (options.databaseAdapter) providers.push(options.databaseAdapter);
 
         return {

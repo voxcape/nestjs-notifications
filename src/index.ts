@@ -28,7 +28,6 @@ export * from './notification.serializer';
 export * from './notification-type-loader';
 
 export * from './interfaces/mail-adapter.interface';
-export * from './interfaces/mail-renderer.interface';
 export * from './interfaces/database-adapter.interface';
 export * from './interfaces/broadcast-adapter.interface';
 export * from './interfaces/queue-adapter.interface';

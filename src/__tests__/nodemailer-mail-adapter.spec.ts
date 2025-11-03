@@ -1,6 +1,5 @@
 import { Logger } from '@nestjs/common';
 import { NodemailerMailAdapter } from '../adapters/nodemailer-mail.adapter';
-import { MailRenderer } from '../interfaces/mail-renderer.interface';
 
 jest.mock('nodemailer', () => {
     const sendMailMock = jest.fn();
@@ -85,60 +84,6 @@ describe('NodemailerMailAdapter', () => {
                 user: 'mailer',
                 pass: 'secret',
             },
-        });
-    });
-
-    it('renders message with renderer before sending', async () => {
-        process.env.MAIL_FROM = 'Notifications <notify@example.com>';
-        const renderer: MailRenderer = {
-            render: jest.fn().mockResolvedValue({
-                subject: 'Rendered subject',
-                text: 'Rendered text',
-                html: '<p>Rendered</p>',
-                headers: { 'X-Test': '1' },
-            }),
-        };
-        const adapter = new NodemailerMailAdapter(renderer);
-
-        const message = {
-            subject: 'Original subject',
-            text: 'Original text',
-            html: '<p>Original</p>',
-            headers: { 'X-Test': '0' },
-        };
-        const recipient = { email: 'user@example.com' };
-
-        await adapter.sendMail(message, recipient);
-
-        expect(renderer.render).toHaveBeenCalledWith(message, recipient);
-        expect(sendMailMock).toHaveBeenCalledWith({
-            from: 'Notifications <notify@example.com>',
-            to: 'user@example.com',
-            subject: 'Rendered subject',
-            text: 'Rendered text',
-            html: '<p>Rendered</p>',
-            headers: { 'X-Test': '1' },
-        });
-        expect(loggerLogSpy).toHaveBeenCalledWith('Mail sent to user@example.com');
-    });
-
-    it('uses message defaults when renderer is not provided', async () => {
-        const adapter = new NodemailerMailAdapter();
-        const message = {
-            to: 'fallback@example.com',
-            text: 'Hello world',
-        };
-        const recipient = {};
-
-        await adapter.sendMail(message, recipient);
-
-        expect(sendMailMock).toHaveBeenCalledWith({
-            from: '"App" <no-reply@app.com>',
-            to: 'fallback@example.com',
-            subject: '[No subject]',
-            text: 'Hello world',
-            html: '<p>Hello world</p>',
-            headers: {},
         });
     });
 

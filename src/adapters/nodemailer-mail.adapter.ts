@@ -1,8 +1,6 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import nodemailer, { Transporter } from 'nodemailer';
 import { MailAdapter } from '../interfaces/mail-adapter.interface';
-import { MAIL_RENDERER } from '../constants';
-import { MailRenderer } from '../interfaces/mail-renderer.interface';
 import { MailMessage, RecipientLike } from '../types';
 import { env } from '../utils/env';
 
@@ -11,7 +9,7 @@ export class NodemailerMailAdapter implements MailAdapter {
     private readonly logger = new Logger(NodemailerMailAdapter.name);
     private transporter: Transporter;
 
-    constructor(@Optional() @Inject(MAIL_RENDERER) private readonly renderer?: MailRenderer) {
+    constructor() {
         this.transporter = nodemailer.createTransport({
             host: env('MAIL_HOST'),
             port: Number(env('MAIL_PORT', 587)),
@@ -27,19 +25,13 @@ export class NodemailerMailAdapter implements MailAdapter {
      * @inheritDoc
      */
     async sendMail(message: MailMessage, recipient: RecipientLike): Promise<void> {
-        let mail = message;
-
-        if (this.renderer) {
-            mail = await this.renderer.render(message, recipient);
-        }
-
         const mailOptions = {
             from: env('MAIL_FROM', '"App" <no-reply@app.com>'),
-            to: recipient.email ?? mail.to,
-            subject: mail.subject ?? '[No subject]',
-            text: mail.text,
-            html: mail.html ?? `<p>${mail.text ?? ''}</p>`,
-            headers: mail.headers ?? {},
+            to: recipient.email ?? message.to,
+            subject: message.subject ?? '[No subject]',
+            text: message.text,
+            html: message.html ?? `<p>${message.text ?? ''}</p>`,
+            headers: message.headers ?? {},
         };
 
         try {
