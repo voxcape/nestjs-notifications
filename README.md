@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./art/logo.png" width="300" alt="NestJS Notifications" />
+</p>
+
 # @voxcape/nestjs-notifications
 
 A Laravel-inspired notifications layer for NestJS that orchestrates mail, broadcast, and queue delivery with plug-and-play adapters.
