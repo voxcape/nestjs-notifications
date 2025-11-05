@@ -105,6 +105,60 @@ export class AppModule {}
 
 `NotificationModule.forRoot()` accepts either provider objects or Nest classes. You can extend the channel pipeline by passing additional providers through the `channels` option.
 
+## Async Configuration
+
+Use `forRootAsync` when configuration depends on runtime values, external services, or dependency injection.
+
+**useFactory** - Inline function with dependency injection:
+
+```ts
+NotificationModule.forRootAsync({
+    imports: [ConfigModule],
+    useFactory: (config: ConfigService) => ({
+        autoDiscoverNotifications: config.get('AUTO_DISCOVER'),
+        worker: {
+            enabled: config.get('WORKER_ENABLED'),
+            blockTimeoutSeconds: config.get('WORKER_TIMEOUT'),
+        },
+        databaseAdapter: {
+            provide: DATABASE_ADAPTER,
+            useClass: PrismaNotificationsAdapter,
+        },
+    }),
+    inject: [ConfigService],
+})
+```
+
+**useClass** - Reusable factory class:
+
+```ts
+@Injectable()
+class NotificationConfigService implements NotificationOptionsFactory {
+    constructor(private config: ConfigService) {}
+
+    async createNotificationOptions(): Promise<NotificationModuleOptions> {
+        return {
+            worker: { enabled: this.config.get('WORKER_ENABLED') },
+            autoDiscoverNotifications: false,
+        };
+    }
+}
+
+NotificationModule.forRootAsync({
+    imports: [ConfigModule],
+    useClass: NotificationConfigService,
+})
+```
+
+**useExisting** - Reuse an existing provider:
+
+```ts
+NotificationModule.forRootAsync({
+    imports: [ConfigModule],
+    useExisting: NotificationConfigService,
+})
+```
+
 ## Creating a notification
 
 Notifications declare which channels they use and how to render payloads per channel. Override `shouldQueue()` when you want the notification processed through the queue.

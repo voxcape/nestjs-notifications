@@ -1,13 +1,21 @@
 import {
     DynamicModule,
     Global,
+    Inject,
     Logger,
     Module,
+    ModuleMetadata,
     OnModuleInit,
     Provider,
     Type,
 } from '@nestjs/common';
-import { NOTIFICATION_CHANNELS, MAIL_ADAPTER, BROADCAST_ADAPTER, QUEUE_ADAPTER } from './constants';
+import {
+    NOTIFICATION_CHANNELS,
+    MAIL_ADAPTER,
+    BROADCAST_ADAPTER,
+    QUEUE_ADAPTER,
+    NOTIFICATION_MODULE_OPTIONS,
+} from './constants';
 import { NotificationManager } from './notification.manager';
 import { MailChannel } from './channels/mail.channel';
 import { DatabaseChannel } from './channels/database.channel';
@@ -81,13 +89,28 @@ export interface NotificationModuleOptions {
     worker?: NotificationWorkerConfig;
 }
 
+export interface NotificationOptionsFactory {
+    createNotificationOptions(): Promise<NotificationModuleOptions> | NotificationModuleOptions;
+}
+
+export interface NotificationModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
+    useExisting?: Type<NotificationOptionsFactory>;
+    useClass?: Type<NotificationOptionsFactory>;
+    useFactory?: (...args: any[]) => Promise<NotificationModuleOptions> | NotificationModuleOptions;
+    inject?: any[];
+}
+
 @Global()
 @Module({})
 export class NotificationModule implements OnModuleInit {
     private static options: NotificationModuleOptions = {};
     private readonly logger = new Logger(NotificationModule.name);
 
-    constructor(private readonly workerService: NotificationWorkerService) {}
+    constructor(
+        private readonly workerService: NotificationWorkerService,
+        @Inject(NOTIFICATION_MODULE_OPTIONS)
+        private readonly moduleOptions: NotificationModuleOptions,
+    ) {}
 
     /**
      * Configures the NotificationModule with optional settings and returns a dynamic module.
@@ -102,11 +125,69 @@ export class NotificationModule implements OnModuleInit {
      */
     static forRoot(options: NotificationModuleOptions = {}): DynamicModule {
         this.options = options;
+        const providers: Provider[] = this.createProviders(options);
+
+        return {
+            module: NotificationModule,
+            providers,
+            exports: [NotificationManager, NotificationSerializer],
+        };
+    }
+
+    /**
+     * Configures the NotificationModule asynchronously, allowing for dynamic option resolution.
+     * Supports useFactory, useClass, and useExisting patterns.
+     *
+     * @param {NotificationModuleAsyncOptions} options - Async configuration options
+     * @return {DynamicModule} A configured dynamic module for NotificationModule
+     */
+    static forRootAsync(options: NotificationModuleAsyncOptions): DynamicModule {
+        const providers: Provider[] = [
+            ...this.createAsyncProviders(options),
+            NotificationManager,
+            NotificationWorkerCommand,
+            NotificationWorkerService,
+            NotificationSerializer,
+            {
+                provide: NOTIFICATION_CHANNELS,
+                useFactory: this.createChannelsFactory(),
+                inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+            {
+                provide: MAIL_ADAPTER,
+                useFactory: this.createAdapterFactory('mailAdapter', NodemailerMailAdapter),
+                inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+            {
+                provide: BROADCAST_ADAPTER,
+                useFactory: this.createAdapterFactory('broadcastAdapter', RedisBroadcastAdapter),
+                inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+            {
+                provide: QUEUE_ADAPTER,
+                useFactory: this.createAdapterFactory('queueAdapter', RedisQueueAdapter),
+                inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+        ];
+
+        return {
+            module: NotificationModule,
+            imports: options.imports,
+            providers,
+            exports: [NotificationManager, NotificationSerializer],
+        };
+    }
+
+    private static createProviders(options: NotificationModuleOptions): Provider[] {
         const providers: Provider[] = [
             NotificationManager,
             NotificationWorkerCommand,
             NotificationWorkerService,
             NotificationSerializer,
+            {
+                provide: NOTIFICATION_MODULE_OPTIONS,
+                useValue: options,
+            },
         ];
 
         const builtInChannels = [MailChannel, DatabaseChannel, BroadcastChannel];
@@ -123,7 +204,7 @@ export class NotificationModule implements OnModuleInit {
             ...channelProviders,
             {
                 provide: NOTIFICATION_CHANNELS,
-                useFactory: (...instances: any[]) => instances,
+                useFactory: (...instances: unknown[]) => instances,
                 inject: channelTokens,
             },
             options.mailAdapter ?? { provide: MAIL_ADAPTER, useClass: NodemailerMailAdapter },
@@ -136,10 +217,78 @@ export class NotificationModule implements OnModuleInit {
 
         if (options.databaseAdapter) providers.push(options.databaseAdapter);
 
-        return {
-            module: NotificationModule,
-            providers,
-            exports: [NotificationManager, NotificationSerializer],
+        return providers;
+    }
+
+    private static createAsyncProviders(options: NotificationModuleAsyncOptions): Provider[] {
+        if (options.useExisting || options.useFactory) {
+            return [this.createAsyncOptionsProvider(options)];
+        }
+
+        if (options.useClass) {
+            return [
+                this.createAsyncOptionsProvider(options),
+                {
+                    provide: options.useClass,
+                    useClass: options.useClass,
+                },
+            ];
+        }
+
+        return [];
+    }
+
+    private static createAsyncOptionsProvider(options: NotificationModuleAsyncOptions): Provider {
+        if (options.useFactory) {
+            return {
+                provide: NOTIFICATION_MODULE_OPTIONS,
+                useFactory: options.useFactory,
+                inject: options.inject || [],
+            };
+        }
+
+        if (options.useExisting) {
+            return {
+                provide: NOTIFICATION_MODULE_OPTIONS,
+                useFactory: async (optionsFactory: NotificationOptionsFactory) =>
+                    optionsFactory.createNotificationOptions(),
+                inject: [options.useExisting],
+            };
+        }
+
+        if (options.useClass) {
+            return {
+                provide: NOTIFICATION_MODULE_OPTIONS,
+                useFactory: async (optionsFactory: NotificationOptionsFactory) =>
+                    optionsFactory.createNotificationOptions(),
+                inject: [options.useClass],
+            };
+        }
+
+        throw new Error('Invalid async options configuration');
+    }
+
+    private static createChannelsFactory() {
+        return (moduleOptions: NotificationModuleOptions) => {
+            const builtInChannels = [MailChannel, DatabaseChannel, BroadcastChannel];
+            const userChannels = moduleOptions.channels ?? [];
+            return [...builtInChannels, ...userChannels];
+        };
+    }
+
+    private static createAdapterFactory(
+        optionKey: keyof NotificationModuleOptions,
+        defaultClass: Type<unknown>,
+    ) {
+        return (moduleOptions: NotificationModuleOptions) => {
+            const adapter = moduleOptions[optionKey];
+            if (adapter) {
+                if (typeof adapter === 'function') {
+                    return new (adapter as Type<unknown>)();
+                }
+                return adapter;
+            }
+            return new defaultClass();
         };
     }
 
@@ -151,9 +300,8 @@ export class NotificationModule implements OnModuleInit {
      * @return {Promise<void>} A promise that resolves when the initialization process is complete.
      */
     async onModuleInit(): Promise<void> {
-        const opts = NotificationModule.options;
-        if (opts.notificationTypes?.length) {
-            for (const NotificationClass of opts.notificationTypes) {
+        if (this.moduleOptions.notificationTypes?.length) {
+            for (const NotificationClass of this.moduleOptions.notificationTypes) {
                 if (isSubclassOf(NotificationClass, BaseNotification)) {
                     const type = (NotificationClass as any).type ?? NotificationClass.name;
                     if (type) {
@@ -166,14 +314,17 @@ export class NotificationModule implements OnModuleInit {
             }
         }
 
-        if (opts.autoDiscoverNotifications ?? true) {
+        if (this.moduleOptions.autoDiscoverNotifications ?? true) {
             await autoDiscoverNotifications({
-                directories: opts.notificationAutoDiscoverDirectories ?? ['dist', 'src'],
+                directories: this.moduleOptions.notificationAutoDiscoverDirectories ?? [
+                    'dist',
+                    'src',
+                ],
             });
         }
 
-        if (opts.worker?.enabled) {
-            const timeout = opts.worker.blockTimeoutSeconds ?? 5;
+        if (this.moduleOptions.worker?.enabled) {
+            const timeout = this.moduleOptions.worker.blockTimeoutSeconds ?? 5;
             this.workerService.start(timeout).catch((err) => {
                 this.logger.error(`Worker crashed: ${err.message}`);
             });
