@@ -4,7 +4,9 @@
 
 <p align="center">
   <a href="https://github.com/voxcape/nestjs-notifications/actions"><img src="https://github.com/voxcape/nestjs-notifications/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
-  <a href="https://github.com/voxcape/nestjs-notifications/blob/main/LICENSE.md"><img src="https://poser.pugx.org/voxcape/nestjs-notifications/license.svg" alt="License"></a>
+  <a href="https://github.com/voxcape/nestjs-notifications/blob/main/LICENSE.md">
+  <img src="https://img.shields.io/github/license/voxcape/nestjs-notifications" alt="License" />
+</a>
 </p>
 
 # @voxcape/nestjs-notifications
