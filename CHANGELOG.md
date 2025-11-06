@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file. The format 
 
 - Planned enhancements and fixes will be documented here before each release.
 
+## [0.1.1] - 2025-11-06
+
+### Changed
+- Expand `reflect-metadata` peer dependency range to include `^0.2.0`.
+
+### Fixed
+- Replace deprecated `husky install` prepare script with the new `husky` command.
+
 ## [0.1.0] - 2025-11-06
 
 - Initial release of `@voxcape/nestjs-notifications`.
