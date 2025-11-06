@@ -1,6 +1,6 @@
 {
   "name": "@voxcape/nestjs-notifications",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Laravel-style notification system for NestJS with Redis broadcast, mail, and queue support.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "prepare": "husky install",
+    "prepare": "husky",
     "test": "jest --passWithNoTests",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "npm run lint -- --fix",
@@ -43,7 +43,7 @@
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
-    "reflect-metadata": "^0.1.13",
+    "reflect-metadata": "^0.1.13 || ^0.2.0",
     "rxjs": "^7.8.1"
   },
   "optionalDependencies": {
