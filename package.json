@@ -1,6 +1,6 @@
 {
   "name": "@voxcape/nestjs-notifications",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A Laravel-style notification system for NestJS with Redis broadcast, mail, and queue support.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
