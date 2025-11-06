@@ -2,6 +2,11 @@
   <img src="./art/logo.png" width="300" alt="NestJS Notifications" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/voxcape/nestjs-notifications/actions"><img src="https://https://github.com/voxcape/nestjs-notifications/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
+  <a href="https://github.com/voxcape/nestjs-notifications/blob/main/LICENSE.md"><img src="https://poser.pugx.org/voxcape/nestjs-notifications/license.svg" alt="License"></a>
+</p>
+
 # @voxcape/nestjs-notifications
 
 A Laravel-inspired notifications layer for NestJS that orchestrates mail, broadcast, and queue delivery with plug-and-play adapters.
