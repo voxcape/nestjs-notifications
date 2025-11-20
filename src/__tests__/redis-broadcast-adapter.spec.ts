@@ -30,6 +30,7 @@ const RedisMock = ioredisMock.Redis;
 const publishMock = ioredisMock.__mocked.publishMock;
 
 const loggerLogSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+const loggerWarnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 const loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
 const envKeys = ['REDIS_HOST', 'REDIS_PORT', 'REDIS_CHANNEL_PREFIX'];
@@ -49,12 +50,14 @@ beforeEach(() => {
     publishMock.mockResolvedValue(undefined);
     RedisMock.mockClear();
     loggerLogSpy.mockClear();
+    loggerWarnSpy.mockClear();
     loggerErrorSpy.mockClear();
     resetEnv();
 });
 
 afterAll(() => {
     loggerLogSpy.mockRestore();
+    loggerWarnSpy.mockRestore();
     loggerErrorSpy.mockRestore();
     Object.entries(originalEnvSnapshot).forEach(([key, value]) => {
         if (value === undefined) {
@@ -66,26 +69,12 @@ afterAll(() => {
 });
 
 describe('RedisBroadcastAdapter', () => {
-    it('does not construct Redis client in constructor', () => {
+    it('creates Redis client when worker enabled', () => {
         process.env.REDIS_HOST = '10.0.0.5';
         process.env.REDIS_PORT = '6380';
         process.env.REDIS_CHANNEL_PREFIX = 'custom.notifications';
 
-        const adapter = new RedisBroadcastAdapter();
-
-        expect(RedisMock).not.toHaveBeenCalled();
-        expect((adapter as any).redisPrefix).toBe('custom.notifications');
-        expect((adapter as any).publisher).toBeNull();
-    });
-
-    it('initializes Redis lazily on first publish and uses environment config', async () => {
-        process.env.REDIS_HOST = '10.0.0.5';
-        process.env.REDIS_PORT = '6380';
-
-        const adapter = new RedisBroadcastAdapter();
-        const payload = { message: 'Hello world' };
-
-        await adapter.publish('updates', payload);
+        const adapter = new RedisBroadcastAdapter({ worker: { enabled: true } });
 
         expect(RedisMock).toHaveBeenCalledWith({
             host: '10.0.0.5',
@@ -93,27 +82,28 @@ describe('RedisBroadcastAdapter', () => {
             lazyConnect: true,
             maxRetriesPerRequest: 1,
         });
-        expect(publishMock).toHaveBeenCalledWith('notifications.updates', JSON.stringify(payload));
-        expect(loggerLogSpy).toHaveBeenCalledWith(
-            expect.stringContaining('Redis broadcast adapter initialized'),
-        );
-        expect(loggerLogSpy).toHaveBeenCalledWith(
-            expect.stringContaining('Published to Redis channel: notifications.updates'),
-        );
+        expect((adapter as any).redisPrefix).toBe('custom.notifications');
     });
 
-    it('only initializes Redis once across multiple publishes', async () => {
+    it('does not create Redis client when worker disabled', () => {
+        process.env.REDIS_HOST = '10.0.0.5';
+        process.env.REDIS_PORT = '6380';
+
+        const adapter = new RedisBroadcastAdapter({ worker: { enabled: false } });
+
+        expect(RedisMock).not.toHaveBeenCalled();
+        expect((adapter as any).publisher).toBeNull();
+    });
+
+    it('does not create Redis client when no module options provided', () => {
         const adapter = new RedisBroadcastAdapter();
 
-        await adapter.publish('updates', { count: 1 });
-        await adapter.publish('alerts', { count: 2 });
-
-        expect(RedisMock).toHaveBeenCalledTimes(1);
-        expect(publishMock).toHaveBeenCalledTimes(2);
+        expect(RedisMock).not.toHaveBeenCalled();
+        expect((adapter as any).publisher).toBeNull();
     });
 
     it('publishes payload to prefixed channel and logs success', async () => {
-        const adapter = new RedisBroadcastAdapter();
+        const adapter = new RedisBroadcastAdapter({ worker: { enabled: true } });
         const payload = { message: 'Hello world' };
 
         await adapter.publish('updates', payload);
@@ -124,8 +114,20 @@ describe('RedisBroadcastAdapter', () => {
         );
     });
 
+    it('skips publish when worker disabled', async () => {
+        const adapter = new RedisBroadcastAdapter({ worker: { enabled: false } });
+        const payload = { message: 'Hello world' };
+
+        await adapter.publish('updates', payload);
+
+        expect(publishMock).not.toHaveBeenCalled();
+        expect(loggerWarnSpy).toHaveBeenCalledWith(
+            'Redis not available. Skipping broadcast operation.',
+        );
+    });
+
     it('logs error when Redis publish throws', async () => {
-        const adapter = new RedisBroadcastAdapter();
+        const adapter = new RedisBroadcastAdapter({ worker: { enabled: true } });
         const failure = new Error('Connection lost');
         publishMock.mockRejectedValueOnce(failure);
 
