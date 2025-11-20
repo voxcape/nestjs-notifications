@@ -1,10 +1,7 @@
 import { TestingModule } from '@nestjs/testing';
 import { Injectable, Module } from '@nestjs/common';
-import {
-    NotificationModule,
-    NotificationModuleOptions,
-    NotificationOptionsFactory,
-} from '../notification.module';
+import { NotificationModule } from '../notification.module';
+import { NotificationModuleOptions, NotificationOptionsFactory } from '../types';
 import { NotificationManager } from '../notification.manager';
 import { BROADCAST_ADAPTER, QUEUE_ADAPTER, NOTIFICATION_MODULE_OPTIONS } from '../constants';
 import { TestModuleHelper } from './helpers/test-module.helper';

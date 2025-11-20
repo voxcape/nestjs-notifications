@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import {
     EnqueueOptions,
     QueueAdapter,
@@ -10,21 +10,33 @@ import { Redis } from 'ioredis';
 import { env } from '../utils/env';
 import { NotificationSerializer } from '../notification.serializer';
 import { BaseNotification } from '../base-notification';
+import { NOTIFICATION_MODULE_OPTIONS } from '../constants';
+import type { NotificationModuleOptions } from '../types';
 
 @Injectable()
 export class RedisQueueAdapter implements QueueAdapter {
     private readonly logger = new Logger(RedisQueueAdapter.name);
-    private redis: Redis;
+    private redis: Redis | null = null;
     private readonly queueKey = env('REDIS_QUEUE_KEY', 'notifications:queue');
+    private readonly host = env('REDIS_HOST', '127.0.0.1');
+    private readonly port = Number(env('REDIS_PORT', 6379));
+    private workerEnabled = false;
 
-    constructor(@Optional() private readonly serializer?: NotificationSerializer) {
-        const host = env('REDIS_HOST', '127.0.0.1');
-        const port = Number(env('REDIS_PORT', 6379));
-
-        this.redis = new Redis({
-            host,
-            port,
-        });
+    constructor(
+        @Optional() private readonly serializer?: NotificationSerializer,
+        @Optional()
+        @Inject(NOTIFICATION_MODULE_OPTIONS)
+        private readonly moduleOptions?: NotificationModuleOptions,
+    ) {
+        this.workerEnabled = this.moduleOptions?.worker?.enabled ?? false;
+        this.redis = this.workerEnabled
+            ? new Redis({
+                  host: this.host,
+                  port: this.port,
+                  lazyConnect: true,
+                  maxRetriesPerRequest: 1,
+              })
+            : null;
     }
 
     /**
@@ -35,6 +47,11 @@ export class RedisQueueAdapter implements QueueAdapter {
         recipient: RecipientLike,
         options: EnqueueOptions = {},
     ): Promise<void> {
+        if (!this.redis) {
+            this.logger.warn('Redis not available. Skipping queue operation.');
+            return;
+        }
+
         if (!this.serializer) {
             throw new Error('RedisQueueAdapter requires NotificationSerializer to enqueue.');
         }
@@ -61,6 +78,10 @@ export class RedisQueueAdapter implements QueueAdapter {
      * @inheritDoc
      */
     async dequeue(config: QueueDequeueConfig = {}): Promise<any | null> {
+        if (!this.redis) {
+            return null;
+        }
+
         const blockTimeout =
             config.blockTimeoutSeconds ?? Number(env('REDIS_QUEUE_BLOCK_TIMEOUT', 5));
         const result = await this.redis.brpop(this.queueKey, blockTimeout);
@@ -83,6 +104,13 @@ export class RedisQueueAdapter implements QueueAdapter {
         processJob: (job: any) => Promise<void>,
         config: QueueWorkerConfig = {},
     ): Promise<void> {
+        if (!this.redis) {
+            this.logger.error('Redis not available. Cannot start worker.');
+            throw new Error(
+                'Redis connection required for worker. Please configure Redis or disable the worker.',
+            );
+        }
+
         const signal = config.stopSignal;
         let running = true;
 
@@ -123,6 +151,10 @@ export class RedisQueueAdapter implements QueueAdapter {
      * @return Number of jobs promoted
      */
     private async promoteDueDelayedJobs(batchSize: number = 100): Promise<number> {
+        if (!this.redis) {
+            return 0;
+        }
+
         const delayedKey = this.getDelayedKey();
         const now = Date.now();
 
