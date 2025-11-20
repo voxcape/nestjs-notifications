@@ -53,13 +53,14 @@ function deleteEnv(keys: string[]): void {
     keys.forEach((key) => delete process.env[key]);
 }
 
-function createAdapter(serializer?: any): RedisQueueAdapter {
-    const adapter = new RedisQueueAdapter(serializer);
+function createAdapter(serializer?: any, moduleOptions?: any): RedisQueueAdapter {
+    const adapter = new RedisQueueAdapter(serializer, moduleOptions);
     adapters.push(adapter);
     return adapter;
 }
 
 const loggerLogSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+const loggerWarnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 const loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
 beforeAll(() => {
@@ -84,20 +85,24 @@ beforeEach(() => {
     lastRedisConfig = undefined;
     deleteEnv(['REDIS_QUEUE_KEY', 'REDIS_HOST', 'REDIS_PORT', 'REDIS_QUEUE_BLOCK_TIMEOUT']);
     loggerLogSpy.mockClear();
+    loggerWarnSpy.mockClear();
     loggerErrorSpy.mockClear();
 });
 
 afterEach(() => {
     adapters.forEach((adapter) => {
         const redisClient = (adapter as any).redis;
-        redisClient.quit?.();
-        redisClient.disconnect?.();
+        if (redisClient) {
+            redisClient.quit?.();
+            redisClient.disconnect?.();
+        }
     });
     adapters.length = 0;
 });
 
 afterAll(() => {
     loggerLogSpy.mockRestore();
+    loggerWarnSpy.mockRestore();
     loggerErrorSpy.mockRestore();
     Object.entries(originalEnvSnapshot).forEach(([key, value]) => {
         if (value === undefined) {
@@ -109,16 +114,43 @@ afterAll(() => {
 });
 
 describe('RedisQueueAdapter', () => {
-    it('creates redis client using environment configuration', () => {
+    it('creates redis client using environment configuration when worker enabled', () => {
         process.env.REDIS_HOST = '10.1.0.5';
         process.env.REDIS_PORT = '6385';
         process.env.REDIS_QUEUE_KEY = 'custom:queue';
 
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
+
+        expect(redisConstructorMock).toHaveBeenCalledWith({
+            host: '10.1.0.5',
+            port: 6385,
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+        });
+        expect(lastRedisConfig).toEqual({
+            host: '10.1.0.5',
+            port: 6385,
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+        });
+        expect((adapter as any).queueKey).toBe('custom:queue');
+    });
+
+    it('does not create redis client when worker disabled', () => {
+        process.env.REDIS_HOST = '10.1.0.5';
+        process.env.REDIS_PORT = '6385';
+
+        const adapter = createAdapter(undefined, { worker: { enabled: false } });
+
+        expect(redisConstructorMock).not.toHaveBeenCalled();
+        expect((adapter as any).redis).toBeNull();
+    });
+
+    it('does not create redis client when no module options provided', () => {
         const adapter = createAdapter();
 
-        expect(redisConstructorMock).toHaveBeenCalledWith({ host: '10.1.0.5', port: 6385 });
-        expect(lastRedisConfig).toEqual({ host: '10.1.0.5', port: 6385 });
-        expect((adapter as any).queueKey).toBe('custom:queue');
+        expect(redisConstructorMock).not.toHaveBeenCalled();
+        expect((adapter as any).redis).toBeNull();
     });
 
     it('enqueues job and logs queue details', async () => {
@@ -130,7 +162,7 @@ describe('RedisQueueAdapter', () => {
                 timestamp: Date.now(),
             })),
         };
-        const adapter = createAdapter(serializer);
+        const adapter = createAdapter(serializer, { worker: { enabled: true } });
         const notification = { constructor: { name: 'TestNotification' } } as unknown as any;
         const recipient = { id: 'user-1' };
 
@@ -147,7 +179,7 @@ describe('RedisQueueAdapter', () => {
     });
 
     it('throws when enqueue is called without serializer', async () => {
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
         const notification = { constructor: { name: 'TestNotification' } } as unknown as any;
         const recipient = { id: 'user-1' };
 
@@ -157,10 +189,31 @@ describe('RedisQueueAdapter', () => {
         expect(lpushMock).not.toHaveBeenCalled();
     });
 
+    it('skips enqueue when worker is disabled', async () => {
+        const serializer = {
+            serialize: jest.fn(() => ({
+                notification: 'Test',
+                data: {},
+                recipient: {},
+                timestamp: Date.now(),
+            })),
+        };
+        const adapter = createAdapter(serializer, { worker: { enabled: false } });
+        const notification = { constructor: { name: 'TestNotification' } } as unknown as any;
+        const recipient = { id: 'user-1' };
+
+        await adapter.enqueue(notification, recipient, {});
+
+        expect(lpushMock).not.toHaveBeenCalled();
+        expect(loggerWarnSpy).toHaveBeenCalledWith(
+            'Redis not available. Skipping queue operation.',
+        );
+    });
+
     it('dequeues job using provided timeout configuration', async () => {
         const jobPayload = { id: 'job-1' };
         brpopMock.mockResolvedValueOnce(['notifications:queue', JSON.stringify(jobPayload)]);
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
 
         const job = await adapter.dequeue({ blockTimeoutSeconds: 1 });
 
@@ -169,16 +222,25 @@ describe('RedisQueueAdapter', () => {
     });
 
     it('returns null when queue is empty', async () => {
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
 
         const job = await adapter.dequeue({ blockTimeoutSeconds: 2 });
 
         expect(job).toBeNull();
     });
 
+    it('returns null when worker is disabled', async () => {
+        const adapter = createAdapter(undefined, { worker: { enabled: false } });
+
+        const job = await adapter.dequeue();
+
+        expect(job).toBeNull();
+        expect(brpopMock).not.toHaveBeenCalled();
+    });
+
     it('returns null and logs when payload cannot be parsed', async () => {
         brpopMock.mockResolvedValueOnce(['notifications:queue', 'not-json']);
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
 
         const job = await adapter.dequeue();
 
@@ -190,7 +252,7 @@ describe('RedisQueueAdapter', () => {
 
     it('uses environment fallback for dequeue timeout', async () => {
         process.env.REDIS_QUEUE_BLOCK_TIMEOUT = '9';
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
 
         await adapter.dequeue();
 
@@ -201,7 +263,7 @@ describe('RedisQueueAdapter', () => {
         const jobPayload = { id: 'job-2' };
         brpopMock.mockResolvedValueOnce(null);
         brpopMock.mockResolvedValueOnce(['notifications:queue', JSON.stringify(jobPayload)]);
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
 
         const controller = new AbortController();
         const processJob = jest.fn().mockResolvedValue(undefined);
@@ -225,7 +287,7 @@ describe('RedisQueueAdapter', () => {
     it('captures job failures and forwards to error handler', async () => {
         const jobPayload = { id: 'job-3' };
         brpopMock.mockResolvedValueOnce(['notifications:queue', JSON.stringify(jobPayload)]);
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
 
         const controller = new AbortController();
         const failure = new Error('failure');
@@ -241,6 +303,17 @@ describe('RedisQueueAdapter', () => {
         expect(loggerErrorSpy).toHaveBeenCalledWith('Job failed: failure');
     });
 
+    it('throws error when work is called with worker disabled', async () => {
+        const adapter = createAdapter(undefined, { worker: { enabled: false } });
+        const processJob = jest.fn();
+
+        await expect(adapter.work(processJob)).rejects.toThrow(
+            'Redis connection required for worker. Please configure Redis or disable the worker.',
+        );
+
+        expect(loggerErrorSpy).toHaveBeenCalledWith('Redis not available. Cannot start worker.');
+    });
+
     it('queues delayed job through zadd when delay option provided', async () => {
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
         const serializer = {
@@ -251,7 +324,7 @@ describe('RedisQueueAdapter', () => {
                 timestamp: 100,
             })),
         };
-        const adapter = createAdapter(serializer);
+        const adapter = createAdapter(serializer, { worker: { enabled: true } });
         const notification = { constructor: { name: 'DelayedNotification' } } as any;
         const recipient = { id: 'user-2', email: 'user2@example.test' };
 
@@ -283,7 +356,7 @@ describe('RedisQueueAdapter', () => {
                 timestamp: 200,
             })),
         };
-        const adapter = createAdapter(serializer);
+        const adapter = createAdapter(serializer, { worker: { enabled: true } });
         const notification = { constructor: { name: 'PayloadDelayNotification' } } as any;
         const recipient = { id: 'user-3' };
 
@@ -301,7 +374,7 @@ describe('RedisQueueAdapter', () => {
     });
 
     it('promotes due delayed jobs into the active queue', async () => {
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_020_000);
         zrangebyscoreMock.mockResolvedValueOnce(['job-a', 'job-b']);
 
@@ -327,12 +400,22 @@ describe('RedisQueueAdapter', () => {
     });
 
     it('skips promotion when no delayed jobs are due', async () => {
-        const adapter = createAdapter();
+        const adapter = createAdapter(undefined, { worker: { enabled: true } });
 
         const promoted = await (adapter as any).promoteDueDelayedJobs();
 
         expect(promoted).toBe(0);
         expect(zrangebyscoreMock).toHaveBeenCalled();
+        expect(multiMock).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when promoting delayed jobs with worker disabled', async () => {
+        const adapter = createAdapter(undefined, { worker: { enabled: false } });
+
+        const promoted = await (adapter as any).promoteDueDelayedJobs();
+
+        expect(promoted).toBe(0);
+        expect(zrangebyscoreMock).not.toHaveBeenCalled();
         expect(multiMock).not.toHaveBeenCalled();
     });
 });

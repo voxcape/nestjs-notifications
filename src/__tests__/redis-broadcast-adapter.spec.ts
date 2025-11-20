@@ -66,15 +66,50 @@ afterAll(() => {
 });
 
 describe('RedisBroadcastAdapter', () => {
-    it('constructs Redis client using environment config and prefix', () => {
+    it('does not construct Redis client in constructor', () => {
         process.env.REDIS_HOST = '10.0.0.5';
         process.env.REDIS_PORT = '6380';
         process.env.REDIS_CHANNEL_PREFIX = 'custom.notifications';
 
         const adapter = new RedisBroadcastAdapter();
 
-        expect(RedisMock).toHaveBeenCalledWith({ host: '10.0.0.5', port: 6380 });
+        expect(RedisMock).not.toHaveBeenCalled();
         expect((adapter as any).redisPrefix).toBe('custom.notifications');
+        expect((adapter as any).publisher).toBeNull();
+    });
+
+    it('initializes Redis lazily on first publish and uses environment config', async () => {
+        process.env.REDIS_HOST = '10.0.0.5';
+        process.env.REDIS_PORT = '6380';
+
+        const adapter = new RedisBroadcastAdapter();
+        const payload = { message: 'Hello world' };
+
+        await adapter.publish('updates', payload);
+
+        expect(RedisMock).toHaveBeenCalledWith({
+            host: '10.0.0.5',
+            port: 6380,
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+        });
+        expect(publishMock).toHaveBeenCalledWith('notifications.updates', JSON.stringify(payload));
+        expect(loggerLogSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Redis broadcast adapter initialized'),
+        );
+        expect(loggerLogSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Published to Redis channel: notifications.updates'),
+        );
+    });
+
+    it('only initializes Redis once across multiple publishes', async () => {
+        const adapter = new RedisBroadcastAdapter();
+
+        await adapter.publish('updates', { count: 1 });
+        await adapter.publish('alerts', { count: 2 });
+
+        expect(RedisMock).toHaveBeenCalledTimes(1);
+        expect(publishMock).toHaveBeenCalledTimes(2);
     });
 
     it('publishes payload to prefixed channel and logs success', async () => {
