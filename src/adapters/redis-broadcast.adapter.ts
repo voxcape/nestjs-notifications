@@ -24,8 +24,6 @@ export class RedisBroadcastAdapter implements BroadcastAdapter {
             ? new Redis({
                   host: this.redisHost,
                   port: this.redisPort,
-                  lazyConnect: true,
-                  maxRetriesPerRequest: 1,
               })
             : null;
     }

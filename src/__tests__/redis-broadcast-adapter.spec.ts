@@ -79,8 +79,6 @@ describe('RedisBroadcastAdapter', () => {
         expect(RedisMock).toHaveBeenCalledWith({
             host: '10.0.0.5',
             port: 6380,
-            lazyConnect: true,
-            maxRetriesPerRequest: 1,
         });
         expect((adapter as any).redisPrefix).toBe('custom.notifications');
     });

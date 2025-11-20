@@ -33,8 +33,6 @@ export class RedisQueueAdapter implements QueueAdapter {
             ? new Redis({
                   host: this.host,
                   port: this.port,
-                  lazyConnect: true,
-                  maxRetriesPerRequest: 1,
               })
             : null;
     }

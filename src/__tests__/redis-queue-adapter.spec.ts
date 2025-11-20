@@ -124,14 +124,10 @@ describe('RedisQueueAdapter', () => {
         expect(redisConstructorMock).toHaveBeenCalledWith({
             host: '10.1.0.5',
             port: 6385,
-            lazyConnect: true,
-            maxRetriesPerRequest: 1,
         });
         expect(lastRedisConfig).toEqual({
             host: '10.1.0.5',
             port: 6385,
-            lazyConnect: true,
-            maxRetriesPerRequest: 1,
         });
         expect((adapter as any).queueKey).toBe('custom:queue');
     });
