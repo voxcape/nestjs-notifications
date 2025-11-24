@@ -6,17 +6,26 @@ All notable changes to this project will be documented in this file. The format 
 
 - Planned enhancements and fixes will be documented here before each release.
 
+## [0.1.3] - 2025-11-24
+
+### Fixed
+
+- **Redis connection crash when worker disabled**: `RedisQueueAdapter` and `RedisBroadcastAdapter` now only connect to Redis when `worker.enabled = true`. Applications no longer crash when Redis is unavailable and worker is disabled.
+
 ## [0.1.2] - 2025-11-06
 
 ### Changed
+
 - Relax `nest-commander` dependency range to `^3.17.1` for broader compatibility.
 
 ## [0.1.1] - 2025-11-06
 
 ### Changed
+
 - Expand `reflect-metadata` peer dependency range to include `^0.2.0`.
 
 ### Fixed
+
 - Replace deprecated `husky install` prepare script with the new `husky` command.
 
 ## [0.1.0] - 2025-11-06
