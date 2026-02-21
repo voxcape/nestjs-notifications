@@ -1,3 +1,9 @@
+// Prevent RedisQueueAdapter / RedisBroadcastAdapter from opening real
+// connections when the module is compiled during these tests.
+jest.mock('ioredis', () => ({
+    Redis: jest.fn().mockReturnValue({ quit: jest.fn().mockResolvedValue(undefined) }),
+}));
+
 import { TestingModule } from '@nestjs/testing';
 import { Injectable, Module } from '@nestjs/common';
 import {
@@ -167,7 +173,6 @@ describe('NotificationModule', () => {
                     autoDiscoverNotifications: false,
                     worker: { enabled: true },
                 }),
-                overrides: [{ token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter }],
             });
 
             expect(module.get(NotificationWorkerService)).toBeInstanceOf(NotificationWorkerService);

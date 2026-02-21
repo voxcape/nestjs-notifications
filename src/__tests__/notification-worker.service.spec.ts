@@ -157,7 +157,7 @@ describe('NotificationWorkerService', () => {
         await expect(serviceWithBadAdapter.start()).rejects.toThrow('does not implement work');
     });
 
-    it('sends raw job data when no serializer is configured', async () => {
+    it('uses raw job data when serializer is absent (@Optional pre-existing behaviour)', async () => {
         const serviceWithoutSerializer = new NotificationWorkerService(
             queueAdapter as unknown as QueueAdapter,
             notifications as unknown as NotificationManager,
