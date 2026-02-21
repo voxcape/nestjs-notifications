@@ -161,24 +161,20 @@ export class NotificationModule implements OnModuleInit {
             },
             {
                 provide: BROADCAST_ADAPTER,
-                useFactory: (moduleOptions: NotificationModuleOptions) =>
-                    moduleOptions.broadcastAdapter
-                        ? this.createAdapterFactory(
-                              'broadcastAdapter',
-                              RedisBroadcastAdapter,
-                          )(moduleOptions)
-                        : null,
+                useFactory: this.createAdapterFactory(
+                    'broadcastAdapter',
+                    RedisBroadcastAdapter,
+                    true,
+                ),
                 inject: [NOTIFICATION_MODULE_OPTIONS],
             },
             {
                 provide: QUEUE_ADAPTER,
-                useFactory: (moduleOptions: NotificationModuleOptions) =>
-                    moduleOptions.queueAdapter || moduleOptions.worker?.enabled
-                        ? this.createAdapterFactory(
-                              'queueAdapter',
-                              RedisQueueAdapter,
-                          )(moduleOptions)
-                        : null,
+                useFactory: this.createAdapterFactory(
+                    'queueAdapter',
+                    RedisQueueAdapter,
+                    (opts) => !opts.queueAdapter && !opts.worker?.enabled,
+                ),
                 inject: [NOTIFICATION_MODULE_OPTIONS],
             },
             {
@@ -314,6 +310,7 @@ export class NotificationModule implements OnModuleInit {
     private static createAdapterFactory(
         optionKey: keyof NotificationModuleOptions,
         defaultClass: Type<unknown>,
+        optional: boolean | ((opts: NotificationModuleOptions) => boolean) = false,
     ) {
         return (moduleOptions: NotificationModuleOptions) => {
             const adapter = moduleOptions[optionKey];
@@ -323,6 +320,8 @@ export class NotificationModule implements OnModuleInit {
                 }
                 return adapter;
             }
+            const isOptional = typeof optional === 'function' ? optional(moduleOptions) : optional;
+            if (isOptional) return null;
             return new defaultClass();
         };
     }
