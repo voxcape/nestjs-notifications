@@ -9,6 +9,7 @@ import { NotificationManager } from '../notification.manager';
 import { BROADCAST_ADAPTER, QUEUE_ADAPTER, NOTIFICATION_MODULE_OPTIONS } from '../constants';
 import { TestModuleHelper } from './helpers/test-module.helper';
 import { NotificationWorkerService } from '../notification-worker.service';
+import { NotificationWorkerCommand } from '../commands/notification-worker.command';
 
 @Injectable()
 class InMemoryBroadcastAdapter {
@@ -99,6 +100,14 @@ describe('NotificationModule', () => {
             });
 
             expect(() => module.get(NotificationWorkerService)).toThrow();
+        });
+
+        it('does not register NotificationWorkerCommand when no queue is configured', async () => {
+            module = await testHelper.create({
+                module: NotificationModule.forRoot({ autoDiscoverNotifications: false }),
+            });
+
+            expect(() => module.get(NotificationWorkerCommand)).toThrow();
         });
 
         it('registers QUEUE_ADAPTER and NotificationWorkerService when queueAdapter is provided', async () => {
@@ -292,6 +301,16 @@ describe('NotificationModule', () => {
                 });
 
                 expect(module.get(NotificationWorkerService)).toBeNull();
+            });
+
+            it('resolves NotificationWorkerCommand to null when no queue is configured', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                });
+
+                expect(module.get(NotificationWorkerCommand)).toBeNull();
             });
 
             it('resolves NotificationWorkerService to an instance when queueAdapter is provided', async () => {
