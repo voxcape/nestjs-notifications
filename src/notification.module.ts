@@ -31,6 +31,7 @@ import { registerNotificationType } from './notification.registry';
 import { BaseNotification } from './base-notification';
 import { NotificationWorkerConfig } from './types';
 import { NotificationWorkerService } from './notification-worker.service';
+import { QueueAdapter } from './interfaces/queue-adapter.interface';
 
 export interface NotificationModuleOptions {
     channels?: Provider[];
@@ -147,8 +148,6 @@ export class NotificationModule implements OnModuleInit {
         const providers: Provider[] = [
             ...this.createAsyncProviders(options),
             NotificationManager,
-            NotificationWorkerCommand,
-            NotificationWorkerService,
             NotificationSerializer,
             {
                 provide: NOTIFICATION_CHANNELS,
@@ -181,6 +180,26 @@ export class NotificationModule implements OnModuleInit {
                           )(moduleOptions)
                         : null,
                 inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+            {
+                provide: NotificationWorkerService,
+                useFactory: (
+                    queueAdapter: QueueAdapter | null,
+                    manager: NotificationManager,
+                    serializer: NotificationSerializer,
+                ) => {
+                    if (!queueAdapter) return null;
+                    return new NotificationWorkerService(queueAdapter, manager, serializer);
+                },
+                inject: [QUEUE_ADAPTER, NotificationManager, NotificationSerializer],
+            },
+            {
+                provide: NotificationWorkerCommand,
+                useFactory: (workerService: NotificationWorkerService | null) => {
+                    if (!workerService) return null;
+                    return new NotificationWorkerCommand(workerService);
+                },
+                inject: [NotificationWorkerService],
             },
         ];
 
@@ -341,10 +360,9 @@ export class NotificationModule implements OnModuleInit {
 
         if (this.moduleOptions.worker?.enabled) {
             if (!this.workerService) {
-                this.logger.error(
-                    'worker.enabled is true but no queue adapter is configured. Provide a queueAdapter in NotificationModule.forRoot().',
+                throw new Error(
+                    'worker.enabled is true but no queue adapter is configured. Provide a queueAdapter in NotificationModule options.',
                 );
-                return;
             }
             const timeout = this.moduleOptions.worker.blockTimeoutSeconds ?? 5;
             this.workerService.start(timeout).catch((err) => {

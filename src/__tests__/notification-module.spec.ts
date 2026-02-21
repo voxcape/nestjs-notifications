@@ -178,10 +178,6 @@ describe('NotificationModule', () => {
                     }),
                     inject: [MockConfigService],
                 }),
-                overrides: [
-                    { token: BROADCAST_ADAPTER, useClass: InMemoryBroadcastAdapter },
-                    { token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter },
-                ],
             });
 
             const manager = module.get(NotificationManager);
@@ -197,10 +193,7 @@ describe('NotificationModule', () => {
                     imports: [MockConfigModule],
                     useClass: NotificationConfigFactory,
                 }),
-                overrides: [
-                    { token: BROADCAST_ADAPTER, useClass: InMemoryBroadcastAdapter },
-                    { token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter },
-                ],
+                overrides: [{ token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter }],
             });
 
             const manager = module.get(NotificationManager);
@@ -223,10 +216,7 @@ describe('NotificationModule', () => {
                     imports: [ConfigWithFactory],
                     useExisting: NotificationConfigFactory,
                 }),
-                overrides: [
-                    { token: BROADCAST_ADAPTER, useClass: InMemoryBroadcastAdapter },
-                    { token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter },
-                ],
+                overrides: [{ token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter }],
             });
 
             const manager = module.get(NotificationManager);
@@ -249,10 +239,6 @@ describe('NotificationModule', () => {
                     },
                     inject: [MockConfigService],
                 }),
-                overrides: [
-                    { token: BROADCAST_ADAPTER, useClass: InMemoryBroadcastAdapter },
-                    { token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter },
-                ],
             });
 
             const manager = module.get(NotificationManager);
@@ -271,14 +257,67 @@ describe('NotificationModule', () => {
                     }),
                     inject: [MockConfigService],
                 }),
-                overrides: [
-                    { token: BROADCAST_ADAPTER, useClass: InMemoryBroadcastAdapter },
-                    { token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter },
-                ],
             });
 
             const manager = module.get(NotificationManager);
             expect(manager).toBeInstanceOf(NotificationManager);
+        });
+
+        describe('provider decoupling', () => {
+            it('resolves QUEUE_ADAPTER to null when no queue is configured', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                });
+
+                expect(module.get(QUEUE_ADAPTER)).toBeNull();
+            });
+
+            it('resolves BROADCAST_ADAPTER to null when no broadcast adapter is configured', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                });
+
+                expect(module.get(BROADCAST_ADAPTER)).toBeNull();
+            });
+
+            it('resolves NotificationWorkerService to null when no queue is configured', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                });
+
+                expect(module.get(NotificationWorkerService)).toBeNull();
+            });
+
+            it('resolves NotificationWorkerService to an instance when queueAdapter is provided', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                    overrides: [{ token: QUEUE_ADAPTER, useClass: InMemoryQueueAdapter }],
+                });
+
+                expect(module.get(NotificationWorkerService)).toBeInstanceOf(
+                    NotificationWorkerService,
+                );
+                expect(module.get(QUEUE_ADAPTER)).toBeInstanceOf(InMemoryQueueAdapter);
+            });
+
+            it('resolves BROADCAST_ADAPTER to an instance when broadcastAdapter is provided', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                    overrides: [{ token: BROADCAST_ADAPTER, useClass: InMemoryBroadcastAdapter }],
+                });
+
+                expect(module.get(BROADCAST_ADAPTER)).toBeInstanceOf(InMemoryBroadcastAdapter);
+            });
         });
     });
 });
