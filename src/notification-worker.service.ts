@@ -9,7 +9,9 @@ export class NotificationWorkerService {
     private readonly logger = new Logger(NotificationWorkerService.name);
 
     constructor(
-        @Inject(QUEUE_ADAPTER) private readonly queueAdapter: QueueAdapter,
+        @Optional()
+        @Inject(QUEUE_ADAPTER)
+        private readonly queueAdapter: QueueAdapter | undefined,
         private readonly notifications: NotificationManager,
         @Optional() private readonly serializer?: NotificationSerializer,
     ) {}
@@ -24,6 +26,12 @@ export class NotificationWorkerService {
      * or rejects if an error occurs during execution.
      */
     async start(blockTimeout?: number): Promise<void> {
+        if (!this.queueAdapter) {
+            throw new Error(
+                'No queue adapter configured. Provide a queueAdapter in NotificationModule.forRoot().',
+            );
+        }
+
         if (typeof this.queueAdapter.work !== 'function') {
             throw new Error(
                 `The injected queue adapter (${this.queueAdapter.constructor.name}) does not implement work(processJob, config).`,

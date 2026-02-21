@@ -5,7 +5,7 @@ import { BroadcastAdapter } from '../interfaces/broadcast-adapter.interface';
 @Injectable()
 export class RedisBroadcastAdapter implements BroadcastAdapter {
     private readonly logger = new Logger(RedisBroadcastAdapter.name);
-    private publisher: Redis;
+    private readonly publisher: Redis;
 
     private readonly redisHost = process.env.REDIS_HOST || '127.0.0.1';
     private readonly redisPort = Number(process.env.REDIS_PORT || 6379);
