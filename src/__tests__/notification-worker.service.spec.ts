@@ -135,4 +135,54 @@ describe('NotificationWorkerService', () => {
             error.stack,
         );
     });
+
+    it('throws a clear error when no queue adapter is configured', async () => {
+        const serviceWithoutAdapter = new NotificationWorkerService(
+            undefined,
+            notifications as unknown as NotificationManager,
+        );
+
+        await expect(serviceWithoutAdapter.start()).rejects.toThrow(
+            'No queue adapter configured. Provide a queueAdapter in NotificationModule.forRoot().',
+        );
+    });
+
+    it('throws when the queue adapter does not implement work()', async () => {
+        const adapterWithoutWork = { enqueue: jest.fn() } as unknown as QueueAdapter;
+        const serviceWithBadAdapter = new NotificationWorkerService(
+            adapterWithoutWork,
+            notifications as unknown as NotificationManager,
+        );
+
+        await expect(serviceWithBadAdapter.start()).rejects.toThrow('does not implement work');
+    });
+
+    it('uses raw job data when serializer is absent (@Optional pre-existing behaviour)', async () => {
+        const serviceWithoutSerializer = new NotificationWorkerService(
+            queueAdapter as unknown as QueueAdapter,
+            notifications as unknown as NotificationManager,
+        );
+        const job = { notification: 'RawJob', data: { x: 1 }, recipient: { id: 'u1' } };
+        queueAdapter.work.mockImplementation(async (handler: (job: any) => Promise<void>) => {
+            await handler(job);
+        });
+        notifications.send.mockResolvedValue(undefined);
+
+        await serviceWithoutSerializer.start();
+
+        expect(notifications.send).toHaveBeenCalledWith(job.data, job.recipient, true);
+    });
+
+    it('aborts the worker on SIGTERM', async () => {
+        queueAdapter.work.mockImplementation(async (_: any, config: QueueWorkerConfig) => {
+            sigtermHandler?.('SIGTERM');
+            expect(config?.stopSignal?.aborted).toBe(true);
+        });
+
+        await service.start();
+
+        expect(loggerLogSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Stop signal (SIGTERM) received'),
+        );
+    });
 });

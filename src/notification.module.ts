@@ -6,6 +6,7 @@ import {
     Module,
     ModuleMetadata,
     OnModuleInit,
+    Optional,
     Provider,
     Type,
 } from '@nestjs/common';
@@ -30,6 +31,7 @@ import { registerNotificationType } from './notification.registry';
 import { BaseNotification } from './base-notification';
 import { NotificationWorkerConfig } from './types';
 import { NotificationWorkerService } from './notification-worker.service';
+import { QueueAdapter } from './interfaces/queue-adapter.interface';
 
 export interface NotificationModuleOptions {
     channels?: Provider[];
@@ -107,7 +109,8 @@ export class NotificationModule implements OnModuleInit {
     private readonly logger = new Logger(NotificationModule.name);
 
     constructor(
-        private readonly workerService: NotificationWorkerService,
+        @Optional()
+        private readonly workerService: NotificationWorkerService | undefined,
         @Inject(NOTIFICATION_MODULE_OPTIONS)
         private readonly moduleOptions: NotificationModuleOptions,
     ) {}
@@ -118,8 +121,8 @@ export class NotificationModule implements OnModuleInit {
      * @param {NotificationModuleOptions} [options={}] - The configuration options for initializing the NotificationModule. Options may include:
      *   - `channels`: Array of custom notification channels to be added to built-in channels.
      *   - `mailAdapter`: Custom mail adapter. If not provided, defaults to `NodemailerMailAdapter`.
-     *   - `broadcastAdapter`: Custom broadcast adapter. If not provided, defaults to `RedisBroadcastAdapter`.
-     *   - `queueAdapter`: Custom queue adapter. If not provided, defaults to `RedisQueueAdapter`.
+     *   - `broadcastAdapter`: Broadcast adapter. When provided, enables pub/sub broadcasting.
+     *   - `queueAdapter`: Queue adapter. When provided (or when `worker.enabled` is true), enables async queueing and registers the worker providers.
      *   - `databaseAdapter`: Custom database adapter.
      * @return {DynamicModule} A configured dynamic module for NotificationModule, including providers and exports.
      */
@@ -145,8 +148,6 @@ export class NotificationModule implements OnModuleInit {
         const providers: Provider[] = [
             ...this.createAsyncProviders(options),
             NotificationManager,
-            NotificationWorkerCommand,
-            NotificationWorkerService,
             NotificationSerializer,
             {
                 provide: NOTIFICATION_CHANNELS,
@@ -160,13 +161,41 @@ export class NotificationModule implements OnModuleInit {
             },
             {
                 provide: BROADCAST_ADAPTER,
-                useFactory: this.createAdapterFactory('broadcastAdapter', RedisBroadcastAdapter),
+                useFactory: this.createAdapterFactory(
+                    'broadcastAdapter',
+                    RedisBroadcastAdapter,
+                    true,
+                ),
                 inject: [NOTIFICATION_MODULE_OPTIONS],
             },
             {
                 provide: QUEUE_ADAPTER,
-                useFactory: this.createAdapterFactory('queueAdapter', RedisQueueAdapter),
+                useFactory: this.createAdapterFactory(
+                    'queueAdapter',
+                    RedisQueueAdapter,
+                    (opts) => !opts.queueAdapter && !opts.worker?.enabled,
+                ),
                 inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+            {
+                provide: NotificationWorkerService,
+                useFactory: (
+                    queueAdapter: QueueAdapter | null,
+                    manager: NotificationManager,
+                    serializer: NotificationSerializer,
+                ) => {
+                    if (!queueAdapter) return null;
+                    return new NotificationWorkerService(queueAdapter, manager, serializer);
+                },
+                inject: [QUEUE_ADAPTER, NotificationManager, NotificationSerializer],
+            },
+            {
+                provide: NotificationWorkerCommand,
+                useFactory: (workerService: NotificationWorkerService | null) => {
+                    if (!workerService) return null;
+                    return new NotificationWorkerCommand(workerService);
+                },
+                inject: [NotificationWorkerService],
             },
         ];
 
@@ -181,14 +210,20 @@ export class NotificationModule implements OnModuleInit {
     private static createProviders(options: NotificationModuleOptions): Provider[] {
         const providers: Provider[] = [
             NotificationManager,
-            NotificationWorkerCommand,
-            NotificationWorkerService,
             NotificationSerializer,
             {
                 provide: NOTIFICATION_MODULE_OPTIONS,
                 useValue: options,
             },
         ];
+
+        const hasQueue = !!options.queueAdapter || !!options.worker?.enabled;
+        if (hasQueue) {
+            providers.push(NotificationWorkerCommand, NotificationWorkerService);
+            providers.push(
+                options.queueAdapter ?? { provide: QUEUE_ADAPTER, useClass: RedisQueueAdapter },
+            );
+        }
 
         const builtInChannels = [MailChannel, DatabaseChannel, BroadcastChannel];
         const userChannels = options.channels ?? [];
@@ -208,13 +243,9 @@ export class NotificationModule implements OnModuleInit {
                 inject: channelTokens,
             },
             options.mailAdapter ?? { provide: MAIL_ADAPTER, useClass: NodemailerMailAdapter },
-            options.broadcastAdapter ?? {
-                provide: BROADCAST_ADAPTER,
-                useClass: RedisBroadcastAdapter,
-            },
-            options.queueAdapter ?? { provide: QUEUE_ADAPTER, useClass: RedisQueueAdapter },
         );
 
+        if (options.broadcastAdapter) providers.push(options.broadcastAdapter);
         if (options.databaseAdapter) providers.push(options.databaseAdapter);
 
         return providers;
@@ -279,6 +310,7 @@ export class NotificationModule implements OnModuleInit {
     private static createAdapterFactory(
         optionKey: keyof NotificationModuleOptions,
         defaultClass: Type<unknown>,
+        optional: boolean | ((opts: NotificationModuleOptions) => boolean) = false,
     ) {
         return (moduleOptions: NotificationModuleOptions) => {
             const adapter = moduleOptions[optionKey];
@@ -288,6 +320,8 @@ export class NotificationModule implements OnModuleInit {
                 }
                 return adapter;
             }
+            const isOptional = typeof optional === 'function' ? optional(moduleOptions) : optional;
+            if (isOptional) return null;
             return new defaultClass();
         };
     }
@@ -324,6 +358,11 @@ export class NotificationModule implements OnModuleInit {
         }
 
         if (this.moduleOptions.worker?.enabled) {
+            if (!this.workerService) {
+                throw new Error(
+                    'worker.enabled is true but no queue adapter is configured. Provide a queueAdapter in NotificationModule options.',
+                );
+            }
             const timeout = this.moduleOptions.worker.blockTimeoutSeconds ?? 5;
             this.workerService.start(timeout).catch((err) => {
                 this.logger.error(`Worker crashed: ${err.message}`);
