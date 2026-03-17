@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/voxcape/nestjs-notifications/compare/v0.2.1...v0.2.2) (2026-03-17)
+
+
+### Bug Fixes
+
+* **module:** resolve channels and adapters via DI in forRootAsync() ([#24](https://github.com/voxcape/nestjs-notifications/issues/24)) ([519cce3](https://github.com/voxcape/nestjs-notifications/commit/519cce3350a0a8c893f3f93fa4ebde082f062982))
+
 ## [0.2.1](https://github.com/voxcape/nestjs-notifications/compare/v0.2.0...v0.2.1) (2026-03-11)
 
 
