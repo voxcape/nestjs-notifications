@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "example:database": "ts-node src/examples/database-channel.ts",
+    "example:async-database": "ts-node src/examples/async-database-channel.ts",
     "example:mail": "ts-node src/examples/mail-channel.ts"
   },
   "dependencies": {

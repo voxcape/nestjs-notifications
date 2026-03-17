@@ -13,6 +13,7 @@ import {
 import {
     NOTIFICATION_CHANNELS,
     MAIL_ADAPTER,
+    DATABASE_ADAPTER,
     BROADCAST_ADAPTER,
     QUEUE_ADAPTER,
     NOTIFICATION_MODULE_OPTIONS,
@@ -145,18 +146,26 @@ export class NotificationModule implements OnModuleInit {
      * @return {DynamicModule} A configured dynamic module for NotificationModule
      */
     static forRootAsync(options: NotificationModuleAsyncOptions): DynamicModule {
+        const builtInChannels: Type<unknown>[] = [MailChannel, DatabaseChannel, BroadcastChannel];
+
         const providers: Provider[] = [
             ...this.createAsyncProviders(options),
             NotificationManager,
             NotificationSerializer,
+            ...builtInChannels,
             {
                 provide: NOTIFICATION_CHANNELS,
-                useFactory: this.createChannelsFactory(),
-                inject: [NOTIFICATION_MODULE_OPTIONS],
+                useFactory: (...instances: unknown[]) => instances,
+                inject: builtInChannels,
             },
             {
                 provide: MAIL_ADAPTER,
                 useFactory: this.createAdapterFactory('mailAdapter', NodemailerMailAdapter),
+                inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+            {
+                provide: DATABASE_ADAPTER,
+                useFactory: this.createAdapterFactory('databaseAdapter', null as any, true),
                 inject: [NOTIFICATION_MODULE_OPTIONS],
             },
             {
@@ -170,12 +179,21 @@ export class NotificationModule implements OnModuleInit {
             },
             {
                 provide: QUEUE_ADAPTER,
-                useFactory: this.createAdapterFactory(
-                    'queueAdapter',
-                    RedisQueueAdapter,
-                    (opts) => !opts.queueAdapter && !opts.worker?.enabled,
-                ),
-                inject: [NOTIFICATION_MODULE_OPTIONS],
+                useFactory: (
+                    moduleOptions: NotificationModuleOptions,
+                    serializer: NotificationSerializer,
+                ) => {
+                    const adapter = moduleOptions.queueAdapter;
+                    if (adapter) {
+                        if (typeof adapter === 'function') {
+                            return new (adapter as Type<unknown>)(serializer);
+                        }
+                        return adapter;
+                    }
+                    if (!moduleOptions.worker?.enabled) return null;
+                    return new RedisQueueAdapter(serializer);
+                },
+                inject: [NOTIFICATION_MODULE_OPTIONS, NotificationSerializer],
             },
             {
                 provide: NotificationWorkerService,
@@ -297,14 +315,6 @@ export class NotificationModule implements OnModuleInit {
         }
 
         throw new Error('Invalid async options configuration');
-    }
-
-    private static createChannelsFactory() {
-        return (moduleOptions: NotificationModuleOptions) => {
-            const builtInChannels = [MailChannel, DatabaseChannel, BroadcastChannel];
-            const userChannels = moduleOptions.channels ?? [];
-            return [...builtInChannels, ...userChannels];
-        };
     }
 
     private static createAdapterFactory(
