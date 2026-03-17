@@ -155,8 +155,17 @@ export class NotificationModule implements OnModuleInit {
             ...builtInChannels,
             {
                 provide: NOTIFICATION_CHANNELS,
-                useFactory: (...instances: unknown[]) => instances,
-                inject: builtInChannels,
+                useFactory: (
+                    options: NotificationModuleOptions,
+                    ...builtInInstances: unknown[]
+                ) => {
+                    const userChannels = (options.channels ?? []).map((ch) => {
+                        if (typeof ch === 'function') return new (ch as Type<unknown>)();
+                        return ch;
+                    });
+                    return [...builtInInstances, ...userChannels];
+                },
+                inject: [NOTIFICATION_MODULE_OPTIONS, ...builtInChannels],
             },
             {
                 provide: MAIL_ADAPTER,
@@ -165,7 +174,7 @@ export class NotificationModule implements OnModuleInit {
             },
             {
                 provide: DATABASE_ADAPTER,
-                useFactory: this.createAdapterFactory('databaseAdapter', null as any, true),
+                useFactory: this.createAdapterFactory('databaseAdapter', null, true),
                 inject: [NOTIFICATION_MODULE_OPTIONS],
             },
             {
@@ -319,7 +328,7 @@ export class NotificationModule implements OnModuleInit {
 
     private static createAdapterFactory(
         optionKey: keyof NotificationModuleOptions,
-        defaultClass: Type<unknown>,
+        defaultClass: Type<unknown> | null,
         optional: boolean | ((opts: NotificationModuleOptions) => boolean) = false,
     ) {
         return (moduleOptions: NotificationModuleOptions) => {
@@ -331,7 +340,7 @@ export class NotificationModule implements OnModuleInit {
                 return adapter;
             }
             const isOptional = typeof optional === 'function' ? optional(moduleOptions) : optional;
-            if (isOptional) return null;
+            if (isOptional || !defaultClass) return null;
             return new defaultClass();
         };
     }
