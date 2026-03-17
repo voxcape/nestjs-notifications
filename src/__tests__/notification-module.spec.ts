@@ -12,7 +12,13 @@ import {
     NotificationOptionsFactory,
 } from '../notification.module';
 import { NotificationManager } from '../notification.manager';
-import { BROADCAST_ADAPTER, QUEUE_ADAPTER, NOTIFICATION_MODULE_OPTIONS } from '../constants';
+import {
+    BROADCAST_ADAPTER,
+    DATABASE_ADAPTER,
+    QUEUE_ADAPTER,
+    NOTIFICATION_MODULE_OPTIONS,
+    NOTIFICATION_CHANNELS,
+} from '../constants';
 import { TestModuleHelper } from './helpers/test-module.helper';
 import { NotificationWorkerService } from '../notification-worker.service';
 import { NotificationWorkerCommand } from '../commands/notification-worker.command';
@@ -20,6 +26,11 @@ import { NotificationWorkerCommand } from '../commands/notification-worker.comma
 @Injectable()
 class InMemoryBroadcastAdapter {
     async publish(): Promise<void> {}
+}
+
+@Injectable()
+class InMemoryDatabaseAdapter {
+    async store(): Promise<void> {}
 }
 
 @Injectable()
@@ -341,6 +352,40 @@ describe('NotificationModule', () => {
                 });
 
                 expect(module.get(BROADCAST_ADAPTER)).toBeInstanceOf(InMemoryBroadcastAdapter);
+            });
+
+            it('resolves DATABASE_ADAPTER to null when no database adapter is configured', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                });
+
+                expect(module.get(DATABASE_ADAPTER)).toBeNull();
+            });
+
+            it('resolves DATABASE_ADAPTER when databaseAdapter is provided via useFactory', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({
+                            autoDiscoverNotifications: false,
+                            databaseAdapter: InMemoryDatabaseAdapter,
+                        }),
+                    }),
+                });
+
+                expect(module.get(DATABASE_ADAPTER)).toBeInstanceOf(InMemoryDatabaseAdapter);
+            });
+
+            it('resolves NOTIFICATION_CHANNELS with built-in channels', async () => {
+                module = await testHelper.create({
+                    module: NotificationModule.forRootAsync({
+                        useFactory: () => ({ autoDiscoverNotifications: false }),
+                    }),
+                });
+
+                const channels = module.get(NOTIFICATION_CHANNELS);
+                expect(channels).toHaveLength(3);
             });
         });
     });

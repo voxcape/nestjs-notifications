@@ -13,6 +13,7 @@ import {
 import {
     NOTIFICATION_CHANNELS,
     MAIL_ADAPTER,
+    DATABASE_ADAPTER,
     BROADCAST_ADAPTER,
     QUEUE_ADAPTER,
     NOTIFICATION_MODULE_OPTIONS,
@@ -145,18 +146,35 @@ export class NotificationModule implements OnModuleInit {
      * @return {DynamicModule} A configured dynamic module for NotificationModule
      */
     static forRootAsync(options: NotificationModuleAsyncOptions): DynamicModule {
+        const builtInChannels: Type<unknown>[] = [MailChannel, DatabaseChannel, BroadcastChannel];
+
         const providers: Provider[] = [
             ...this.createAsyncProviders(options),
             NotificationManager,
             NotificationSerializer,
+            ...builtInChannels,
             {
                 provide: NOTIFICATION_CHANNELS,
-                useFactory: this.createChannelsFactory(),
-                inject: [NOTIFICATION_MODULE_OPTIONS],
+                useFactory: (
+                    options: NotificationModuleOptions,
+                    ...builtInInstances: unknown[]
+                ) => {
+                    const userChannels = (options.channels ?? []).map((ch) => {
+                        if (typeof ch === 'function') return new (ch as Type<unknown>)();
+                        return ch;
+                    });
+                    return [...builtInInstances, ...userChannels];
+                },
+                inject: [NOTIFICATION_MODULE_OPTIONS, ...builtInChannels],
             },
             {
                 provide: MAIL_ADAPTER,
                 useFactory: this.createAdapterFactory('mailAdapter', NodemailerMailAdapter),
+                inject: [NOTIFICATION_MODULE_OPTIONS],
+            },
+            {
+                provide: DATABASE_ADAPTER,
+                useFactory: this.createAdapterFactory('databaseAdapter', null, true),
                 inject: [NOTIFICATION_MODULE_OPTIONS],
             },
             {
@@ -170,12 +188,21 @@ export class NotificationModule implements OnModuleInit {
             },
             {
                 provide: QUEUE_ADAPTER,
-                useFactory: this.createAdapterFactory(
-                    'queueAdapter',
-                    RedisQueueAdapter,
-                    (opts) => !opts.queueAdapter && !opts.worker?.enabled,
-                ),
-                inject: [NOTIFICATION_MODULE_OPTIONS],
+                useFactory: (
+                    moduleOptions: NotificationModuleOptions,
+                    serializer: NotificationSerializer,
+                ) => {
+                    const adapter = moduleOptions.queueAdapter;
+                    if (adapter) {
+                        if (typeof adapter === 'function') {
+                            return new (adapter as Type<unknown>)(serializer);
+                        }
+                        return adapter;
+                    }
+                    if (!moduleOptions.worker?.enabled) return null;
+                    return new RedisQueueAdapter(serializer);
+                },
+                inject: [NOTIFICATION_MODULE_OPTIONS, NotificationSerializer],
             },
             {
                 provide: NotificationWorkerService,
@@ -299,17 +326,9 @@ export class NotificationModule implements OnModuleInit {
         throw new Error('Invalid async options configuration');
     }
 
-    private static createChannelsFactory() {
-        return (moduleOptions: NotificationModuleOptions) => {
-            const builtInChannels = [MailChannel, DatabaseChannel, BroadcastChannel];
-            const userChannels = moduleOptions.channels ?? [];
-            return [...builtInChannels, ...userChannels];
-        };
-    }
-
     private static createAdapterFactory(
         optionKey: keyof NotificationModuleOptions,
-        defaultClass: Type<unknown>,
+        defaultClass: Type<unknown> | null,
         optional: boolean | ((opts: NotificationModuleOptions) => boolean) = false,
     ) {
         return (moduleOptions: NotificationModuleOptions) => {
@@ -321,7 +340,7 @@ export class NotificationModule implements OnModuleInit {
                 return adapter;
             }
             const isOptional = typeof optional === 'function' ? optional(moduleOptions) : optional;
-            if (isOptional) return null;
+            if (isOptional || !defaultClass) return null;
             return new defaultClass();
         };
     }
