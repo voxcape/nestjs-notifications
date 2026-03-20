@@ -89,14 +89,14 @@ export class NotificationManager {
             `Retrying ${notification.constructor.name} (attempt ${nextAttempt}/${maxAttempts}) after ${backoffSeconds}s`,
         );
 
-        if (!this.queueAdapter) {
-            this.logger?.error('No queue adapter configured; cannot retry notification.');
-            return;
+        if (this.queueAdapter && notification.shouldQueue()) {
+            await this.queueAdapter.enqueue(notification, recipient, {
+                attempt: nextAttempt,
+                delaySeconds: backoffSeconds,
+            });
+        } else {
+            await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
+            await this.send(notification, recipient, true, nextAttempt);
         }
-
-        await this.queueAdapter.enqueue(notification, recipient, {
-            attempt: nextAttempt,
-            delaySeconds: backoffSeconds,
-        });
     }
 }

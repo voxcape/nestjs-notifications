@@ -33,31 +33,34 @@ import { BaseNotification } from './base-notification';
 import { NotificationWorkerConfig } from './types';
 import { NotificationWorkerService } from './notification-worker.service';
 import { QueueAdapter } from './interfaces/queue-adapter.interface';
+import { MailAdapter } from './interfaces/mail-adapter.interface';
+import { DatabaseAdapter } from './interfaces/database-adapter.interface';
+import { BroadcastAdapter } from './interfaces/broadcast-adapter.interface';
 
 export interface NotificationModuleOptions {
     channels?: Provider[];
-    mailAdapter?: Provider;
-    databaseAdapter?: Provider;
+    mailAdapter?: Provider | MailAdapter;
+    databaseAdapter?: Provider | DatabaseAdapter;
     /**
      * An optional property that specifies the broadcast adapter to be used.
      * This adapter acts as a provider for handling communication or broadcasting events
      * between different parts of the application.
      * Can be set to customize or override the default broadcast mechanism.
      *
-     * @type {Provider | undefined}
+     * @type {Provider | BroadcastAdapter | undefined}
      */
-    broadcastAdapter?: Provider;
+    broadcastAdapter?: Provider | BroadcastAdapter;
     /**
-     * Represents an optional provider for a queue adapter.
+     * Represents an optional provider or instance for a queue adapter.
      * The queue adapter is used to interact with a specific queuing system or service.
      * It allows for the integration and management of tasks or messages being processed in the queue.
      *
      * This property is optional and may not always be set, depending on the use case or implementation.
-     * When assigned, it must be a valid provider instance.
+     * When assigned, it must be a valid provider or adapter instance.
      *
-     * @type {Provider | undefined}
+     * @type {Provider | QueueAdapter | undefined}
      */
-    queueAdapter?: Provider;
+    queueAdapter?: Provider | QueueAdapter;
     /**
      * Indicates whether the system should automatically discover notifications.
      * If set to `true`, notifications may be automatically detected and handled
@@ -234,6 +237,15 @@ export class NotificationModule implements OnModuleInit {
         };
     }
 
+    private static isProvider(value: unknown): value is Provider {
+        if (typeof value === 'function') return true;
+        return typeof value === 'object' && value !== null && 'provide' in value;
+    }
+
+    private static toProvider(token: symbol, value: unknown): Provider {
+        return this.isProvider(value) ? value : { provide: token, useValue: value };
+    }
+
     private static createProviders(options: NotificationModuleOptions): Provider[] {
         const providers: Provider[] = [
             NotificationManager,
@@ -246,9 +258,12 @@ export class NotificationModule implements OnModuleInit {
 
         const hasQueue = !!options.queueAdapter || !!options.worker?.enabled;
         if (hasQueue) {
-            providers.push(NotificationWorkerCommand, NotificationWorkerService);
             providers.push(
-                options.queueAdapter ?? { provide: QUEUE_ADAPTER, useClass: RedisQueueAdapter },
+                NotificationWorkerCommand,
+                NotificationWorkerService,
+                options.queueAdapter
+                    ? this.toProvider(QUEUE_ADAPTER, options.queueAdapter)
+                    : { provide: QUEUE_ADAPTER, useClass: RedisQueueAdapter },
             );
         }
 
@@ -269,11 +284,15 @@ export class NotificationModule implements OnModuleInit {
                 useFactory: (...instances: unknown[]) => instances,
                 inject: channelTokens,
             },
-            options.mailAdapter ?? { provide: MAIL_ADAPTER, useClass: NodemailerMailAdapter },
+            options.mailAdapter
+                ? this.toProvider(MAIL_ADAPTER, options.mailAdapter)
+                : { provide: MAIL_ADAPTER, useClass: NodemailerMailAdapter },
         );
 
-        if (options.broadcastAdapter) providers.push(options.broadcastAdapter);
-        if (options.databaseAdapter) providers.push(options.databaseAdapter);
+        if (options.broadcastAdapter)
+            providers.push(this.toProvider(BROADCAST_ADAPTER, options.broadcastAdapter));
+        if (options.databaseAdapter)
+            providers.push(this.toProvider(DATABASE_ADAPTER, options.databaseAdapter));
 
         return providers;
     }
