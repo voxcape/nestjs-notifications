@@ -64,7 +64,7 @@ export interface Notification<R extends RecipientLike = RecipientLike> {
      * @param recipient - The target recipient to which the data will be broadcast.
      * @return {any} The data formatted and ready for broadcasting to the recipient.
      */
-    toBroadcast?(recipient: R): any | Promise<any>;
+    toBroadcast?(recipient: R): any;
 
     /**
      * Determines the broadcast channels or targets the given recipient should listen to.

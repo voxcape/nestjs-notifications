@@ -24,4 +24,19 @@ describe('BroadcastChannel', () => {
         expect(adapter.published[0].channel).toBe('user.1');
         expect(adapter.published[1].payload.message).toBe('Ping');
     });
+
+    it('resolves async toBroadcast before publishing', async () => {
+        const adapter = new MockBroadcastAdapter();
+        const channel = new BroadcastChannel(adapter as any);
+
+        const notif = {
+            broadcastOn: () => ['user.1'],
+            toBroadcast: async () => ({ message: 'AsyncPing' }),
+        };
+
+        await channel.send(notif as any, { id: 1 });
+
+        expect(adapter.published.length).toBe(1);
+        expect(adapter.published[0].payload.message).toBe('AsyncPing');
+    });
 });
