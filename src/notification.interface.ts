@@ -56,7 +56,7 @@ export interface Notification<R extends RecipientLike = RecipientLike> {
      * @return {DatabaseRecord | undefined} A database record representation of the recipient,
      * or undefined if the conversion cannot be performed.
      */
-    toDatabase?(recipient: R): DatabaseRecord | undefined;
+    toDatabase?(recipient: R): DatabaseRecord | undefined | Promise<DatabaseRecord | undefined>;
 
     /**
      * Converts or prepares data to be sent to the specified recipient.

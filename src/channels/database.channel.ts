@@ -19,7 +19,7 @@ export class DatabaseChannel implements NotificationChannel {
      * @inheritDoc
      */
     async send(notification: Notification, recipient: RecipientLike): Promise<void> {
-        const record = notification.toDatabase?.(recipient);
+        const record = await notification.toDatabase?.(recipient);
         if (record && this.adapter) await this.adapter.save(record);
     }
 }

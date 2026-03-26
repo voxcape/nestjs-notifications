@@ -19,7 +19,7 @@ export class MailChannel implements NotificationChannel {
      * @inheritDoc
      */
     async send(notification: Notification, recipient: RecipientLike): Promise<void> {
-        const message = notification.toMail?.(recipient);
+        const message = await notification.toMail?.(recipient);
         if (message && this.adapter) await this.adapter.sendMail(message, recipient);
     }
 }

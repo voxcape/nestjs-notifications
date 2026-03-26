@@ -52,4 +52,20 @@ describe('DatabaseChannel', () => {
         expect(notification.toDatabase).toHaveBeenCalledWith(recipient);
         expect(adapter.save).not.toHaveBeenCalled();
     });
+
+    it('resolves async toDatabase before saving', async () => {
+        const record = { userId: 1, type: 'async-test' } as any;
+        const notification = createNotification({
+            toDatabase: jest.fn().mockResolvedValue(record),
+        });
+        const adapter: DatabaseAdapter = {
+            save: jest.fn().mockResolvedValue(undefined),
+        };
+        const channel = new DatabaseChannel(adapter);
+
+        await channel.send(notification, recipient);
+
+        expect(notification.toDatabase).toHaveBeenCalledWith(recipient);
+        expect(adapter.save).toHaveBeenCalledWith(record);
+    });
 });

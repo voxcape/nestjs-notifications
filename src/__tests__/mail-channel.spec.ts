@@ -24,4 +24,18 @@ describe('MailChannel', () => {
         expect(adapter.sent[0].message.subject).toBe('Hi');
         expect(adapter.sent[0].recipient.email).toBe('test@example.com');
     });
+
+    it('resolves async toMail before sending', async () => {
+        const adapter = new MockMailAdapter();
+        const channel = new MailChannel(adapter as any);
+
+        const notif = {
+            toMail: async () => ({ subject: 'Async', text: 'Hello World' }),
+        };
+
+        await channel.send(notif as any, { email: 'test@example.com' });
+
+        expect(adapter.sent.length).toBe(1);
+        expect(adapter.sent[0].message.subject).toBe('Async');
+    });
 });
