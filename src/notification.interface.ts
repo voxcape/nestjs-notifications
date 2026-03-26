@@ -56,7 +56,7 @@ export interface Notification<R extends RecipientLike = RecipientLike> {
      * @return {DatabaseRecord | undefined} A database record representation of the recipient,
      * or undefined if the conversion cannot be performed.
      */
-    toDatabase?(recipient: R): DatabaseRecord | undefined;
+    toDatabase?(recipient: R): DatabaseRecord | undefined | Promise<DatabaseRecord | undefined>;
 
     /**
      * Converts or prepares data to be sent to the specified recipient.
@@ -64,7 +64,7 @@ export interface Notification<R extends RecipientLike = RecipientLike> {
      * @param recipient - The target recipient to which the data will be broadcast.
      * @return {any} The data formatted and ready for broadcasting to the recipient.
      */
-    toBroadcast?(recipient: R): any;
+    toBroadcast?(recipient: R): any | Promise<any>;
 
     /**
      * Determines the broadcast channels or targets the given recipient should listen to.

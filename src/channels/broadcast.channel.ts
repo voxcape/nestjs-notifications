@@ -20,7 +20,7 @@ export class BroadcastChannel implements NotificationChannel {
      * @inheritDoc
      */
     async send(notification: Notification, recipient: RecipientLike): Promise<void> {
-        const payload = notification.toBroadcast?.(recipient);
+        const payload = await notification.toBroadcast?.(recipient);
         const targets = ensureArray(notification.broadcastOn?.(recipient));
 
         if (!payload || !targets.length || !this.adapter) return;
