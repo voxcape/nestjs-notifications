@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/voxcape/nestjs-notifications/compare/v0.3.0...v0.3.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* **channels:** await async toMail/toDatabase/toBroadcast in channel send methods ([#32](https://github.com/voxcape/nestjs-notifications/issues/32)) ([a1a6e4c](https://github.com/voxcape/nestjs-notifications/commit/a1a6e4cc0f53e4e97c67ffd2522d58cbf846b6a6))
+
 ## [0.3.0](https://github.com/voxcape/nestjs-notifications/compare/v0.2.2...v0.3.0) (2026-03-20)
 
 
