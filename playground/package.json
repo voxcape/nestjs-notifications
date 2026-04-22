@@ -8,7 +8,7 @@
     "example:mail": "ts-node src/examples/mail-channel.ts"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.0",
+    "@nestjs/common": "^11.1.17",
     "@nestjs/core": "^11.0.0",
     "@voxcape/nestjs-notifications": "file:../",
     "reflect-metadata": "^0.2.0",
